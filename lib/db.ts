@@ -245,6 +245,28 @@ function saveLocalAwards(compId: string, awards: AwardCategory[]) {
 
 // ─── Competitions ─────────────────────────────────────────────────────────────
 
+export function subscribeCompetitions(
+  callback: (comps: Competition[]) => void
+): Unsubscribe {
+  callback(getLocalCompetitions());
+
+  function handleLocalEvent() {
+    callback(getLocalCompetitions());
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener(SYNC_EVENT, handleLocalEvent);
+    window.addEventListener("storage", handleLocalEvent);
+  }
+
+  return () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener(SYNC_EVENT, handleLocalEvent);
+      window.removeEventListener("storage", handleLocalEvent);
+    }
+  };
+}
+
 export async function getCompetitions(): Promise<Competition[]> {
   try {
     const snap = await getDocs(collection(db, "competitions"));
@@ -528,6 +550,26 @@ export async function deleteCriteriaItemFromSet(
 
   const allFlat = updated.flatMap((s) => s.items);
   saveLocalCriteria(competitionId, allFlat);
+}
+
+export async function assignJudgesToSet(
+  competitionId: string,
+  setId: string,
+  judgeIds: string[]
+): Promise<void> {
+  const current = getLocalCriteriaSets(competitionId);
+  const updated = current.map((s) => (s.id === setId ? { ...s, assignedJudgeIds: judgeIds } : s));
+  saveLocalCriteriaSets(competitionId, updated);
+}
+
+export async function assignJudgesToAward(
+  competitionId: string,
+  awardId: string,
+  judgeIds: string[]
+): Promise<void> {
+  const current = getLocalAwards(competitionId);
+  const updated = current.map((a) => (a.id === awardId ? { ...a, assignedJudgeIds: judgeIds } : a));
+  saveLocalAwards(competitionId, updated);
 }
 
 // ─── Award Categories ("Ways to Win") ─────────────────────────────────────────

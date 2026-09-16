@@ -23,6 +23,7 @@ import {
   addAwardCategory,
   renameAwardCategory,
   deleteAwardCategory,
+  assignJudgesToAward,
 } from "@/lib/db";
 import { buildResults } from "@/lib/scoring";
 import {
@@ -198,7 +199,7 @@ export default function AdminDashboard(props: {
           <TabCriteria compId={competitionId} criteriaSets={criteriaSets} criteria={criteria} />
         )}
         {activeTab === "status" && (
-          <TabStatus compId={competitionId} participants={participants} scores={scores} judges={judges} criteria={criteria} criteriaSets={criteriaSets} />
+          <TabStatus compId={competitionId} participants={participants} scores={scores} judges={judges} criteria={criteria} criteriaSets={criteriaSets} awards={awards} />
         )}
         {activeTab === "live" && (
           <TabLive results={results} judges={judges} criteria={criteria} />
@@ -672,6 +673,7 @@ function TabStatus({
   judges,
   criteria,
   criteriaSets,
+  awards,
 }: {
   compId: string;
   participants: any[];
@@ -679,12 +681,60 @@ function TabStatus({
   judges: Judge[];
   criteria: CriteriaItem[];
   criteriaSets: CriteriaSet[];
+  awards: AwardCategory[];
 }) {
   const [viewMode, setViewMode] = useState<"participant" | "matrix">("participant");
   const activeJudges = judges.length > 0 ? judges : INITIAL_JUDGES;
 
   return (
     <div>
+      {/* Assign Judges per Way to Win Card */}
+      {awards.length > 0 && judges.length > 0 && (
+        <div className="card" style={{ padding: "1.25rem", marginBottom: "1.5rem", background: "var(--blue-50)", border: "1px solid var(--blue-200)" }}>
+          <h4 style={{ margin: "0 0 0.5rem 0", color: "var(--blue-900)" }}>
+            Assign Judges to "Ways to Win" Categories
+          </h4>
+          <p style={{ fontSize: "0.85rem", color: "var(--gray-600)", margin: "0 0 1rem 0" }}>
+            Select which judges are assigned to score each specific award category.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+            {awards.map((award) => {
+              const assigned = award.assignedJudgeIds && award.assignedJudgeIds.length > 0
+                ? award.assignedJudgeIds
+                : judges.map((j) => j.id);
+
+              return (
+                <div key={award.id} style={{ background: "#ffffff", padding: "0.8rem 1rem", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
+                  <div style={{ fontWeight: 600, color: "var(--blue-950)", marginBottom: "0.4rem" }}>
+                    🏆 {award.name}
+                  </div>
+                  <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                    {judges.map((j) => (
+                      <label key={j.id} style={{ fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={assigned.includes(j.id)}
+                          onChange={async () => {
+                            const current = award.assignedJudgeIds && award.assignedJudgeIds.length > 0
+                              ? award.assignedJudgeIds
+                              : judges.map((x) => x.id);
+                            const updated = current.includes(j.id)
+                              ? current.filter((id) => id !== j.id)
+                              : [...current, j.id];
+                            await assignJudgesToAward(compId, award.id, updated);
+                          }}
+                        />
+                        {j.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Criteria Set Active Selector Bar for Admin */}
       {criteriaSets.length > 0 && (
         <div className="card" style={{ padding: "1rem 1.25rem", marginBottom: "1.5rem", background: "var(--blue-50)", border: "1px solid var(--blue-200)" }}>
@@ -1432,9 +1482,15 @@ function TabSummary({
               <tr>
                 <th>Rank</th>
                 <th>Participant</th>
-                <th>Avg Score (/100%)</th>
-                <th>Vocal (C1+C2)</th>
-                <th>Choreo (C3+C4)</th>
+                <th>Overall Avg (/100%)</th>
+                {awards.length > 0 ? (
+                  awards.map((a) => <th key={a.id}>{a.name}</th>)
+                ) : (
+                  <>
+                    <th>Vocal (C1+C2)</th>
+                    <th>Choreo (C3+C4)</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -1443,11 +1499,23 @@ function TabSummary({
                 .sort((a, b) => a.rank - b.rank)
                 .map((r) => (
                   <tr key={r.participant.id}>
-                    <td style={{ fontWeight: "bold" }}>Rank {r.rank}</td>
-                    <td>{r.participant.name}</td>
-                    <td style={{ fontWeight: "bold", color: "var(--blue-700)" }}>{r.averageWeighted.toFixed(2)}%</td>
-                    <td>{r.averageVocal.toFixed(2)}%</td>
-                    <td>{r.averageChoreo.toFixed(2)}%</td>
+                    <td style={{ fontWeight: "bold" }}>
+                      {getMedal(r.rank)} Rank {r.rank}
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{r.participant.name}</td>
+                    <td style={{ fontWeight: "bold", color: "var(--blue-600)" }}>{r.averageWeighted.toFixed(2)}%</td>
+                    {awards.length > 0 ? (
+                      awards.map((a) => (
+                        <td key={a.id} style={{ fontWeight: 500 }}>
+                          {(r.awardAverages?.[a.id] || 0).toFixed(2)}%
+                        </td>
+                      ))
+                    ) : (
+                      <>
+                        <td>{r.averageVocal.toFixed(2)}%</td>
+                        <td>{r.averageChoreo.toFixed(2)}%</td>
+                      </>
+                    )}
                   </tr>
                 ))}
             </tbody>

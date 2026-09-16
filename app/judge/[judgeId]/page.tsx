@@ -1,7 +1,7 @@
 "use client";
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getCompetitions } from "@/lib/db";
+import { getCompetitions, subscribeCompetitions } from "@/lib/db";
 import type { Competition } from "@/lib/types";
 import { ChevronRight } from "lucide-react";
 import styles from "./page.module.css";
@@ -29,22 +29,16 @@ export default function JudgeHome(props: { params: Promise<{ judgeId: string }> 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchComps() {
-      try {
-        const comps = await getCompetitions();
-        if (comps.length > 0) {
-          setCompetitions(comps);
-        } else {
-          setCompetitions([fallbackCompetition]);
-        }
-      } catch (err) {
-        console.error("Failed to load competitions, using fallback.", err);
+    getCompetitions();
+    const unsub = subscribeCompetitions((comps) => {
+      if (comps.length > 0) {
+        setCompetitions(comps);
+      } else {
         setCompetitions([fallbackCompetition]);
-      } finally {
-        setLoading(false);
       }
-    }
-    fetchComps();
+      setLoading(false);
+    });
+    return () => unsub();
   }, []);
 
   return (

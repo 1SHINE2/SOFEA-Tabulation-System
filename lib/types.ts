@@ -43,6 +43,7 @@ export interface CriteriaSet {
   name: string;
   competitionId: string;
   isActive: boolean;
+  assignedJudgeIds?: string[]; // IDs of assigned judges (if undefined/empty, all judges score)
   items: CriteriaItem[];
   createdAt: number;
 }
@@ -52,6 +53,7 @@ export interface AwardCategory {
   name: string;
   competitionId: string;
   criteriaKeys: string[]; // array of criteria keys included e.g. ["c1", "c2"]
+  assignedJudgeIds?: string[]; // IDs of judges assigned to score this award
   createdAt: number;
 }
 

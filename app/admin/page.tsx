@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getCompetitions, createCompetition, deleteCompetition } from "@/lib/db";
+import { getCompetitions, createCompetition, deleteCompetition, subscribeCompetitions } from "@/lib/db";
 import type { Competition } from "@/lib/types";
 import styles from "./page.module.css";
 import { Trophy, Plus, Trash2, X } from "lucide-react";
@@ -18,35 +18,13 @@ export default function AdminHome() {
   const [guidelinesText, setGuidelinesText] = useState("");
 
   useEffect(() => {
-    loadComps();
-  }, []);
-
-  async function loadComps() {
-    try {
-      const data = await getCompetitions();
-      if (data.length > 0) {
-        setCompetitions(data);
-      } else {
-        const defaultComp: Competition = {
-          id: "comp_1",
-          name: "General Assembly",
-          academicYear: "2026-2027",
-          description: "General Assembly Competition",
-          guidelines: [
-            "Performance must strictly last 3 to 4 minutes.",
-            "All vocals and choreography must be performed live.",
-          ],
-          status: "active",
-          createdAt: Date.now(),
-        };
-        setCompetitions([defaultComp]);
-      }
-    } catch (err) {
-      setCompetitions([]);
-    } finally {
+    getCompetitions();
+    const unsub = subscribeCompetitions((comps) => {
+      setCompetitions(comps);
       setLoading(false);
-    }
-  }
+    });
+    return () => unsub();
+  }, []);
 
   async function handleAddCompetition(e: React.FormEvent) {
     e.preventDefault();
@@ -69,7 +47,6 @@ export default function AdminHome() {
     setDescription("");
     setGuidelinesText("");
     setShowModal(false);
-    loadComps();
   }
 
   async function handleDeleteCompetition(e: React.MouseEvent, compId: string, compName: string) {
@@ -79,7 +56,6 @@ export default function AdminHome() {
     if (!confirm(`Are you sure you want to delete "${compName}"? This action cannot be undone.`)) return;
 
     await deleteCompetition(compId);
-    loadComps();
   }
 
   if (loading) {
