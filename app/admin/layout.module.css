@@ -1,0 +1,28 @@
+.header {
+  background: var(--blue-900);
+  color: white;
+  padding: 1rem 0;
+}
+.headerInner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.logoTitle {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.logo {
+  height: 40px;
+  width: auto;
+  border-radius: 4px;
+}
+.title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+}
+.main {
+  min-height: calc(100vh - 72px);
+}

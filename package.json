@@ -1,0 +1,28 @@
+{
+  "name": "tabulation-app",
+  "version": "1.0.0",
+  "description": "SOFEA General Assembly Tabulation System",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "firebase": "^11.0.0",
+    "lucide-react": "^0.469.0",
+    "next": "^15.3.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^9",
+    "eslint-config-next": "^15.3.0",
+    "typescript": "^5"
+  }
+}

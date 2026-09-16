@@ -1,0 +1,53 @@
+.page {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.title {
+  margin-bottom: 1.5rem;
+  color: var(--blue-900);
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 0;
+  gap: 1rem;
+  color: var(--gray-500);
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.compCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.compCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--blue-200);
+}
+
+.compInfo h3 {
+  margin: 0 0 0.25rem 0;
+  color: var(--gray-900);
+}
+
+.year {
+  font-size: 0.85rem;
+  color: var(--gray-500);
+  margin: 0;
+}
+
+.chevron {
+  color: var(--gray-400);
+}
