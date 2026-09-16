@@ -45,27 +45,44 @@ function getLocalCompetitions(): Competition[] {
     const raw = localStorage.getItem("sofea_competitions");
     if (raw) {
       const comps: Competition[] = JSON.parse(raw);
-      let updated = false;
-      const migrated = comps.map((c) => {
-        if (c.name === "Best in Pop Sing & Dance" || c.description === "SOFEA Competition") {
-          updated = true;
-          return {
-            ...c,
-            name: c.name === "Best in Pop Sing & Dance" ? "General Assembly" : c.name,
-            description: c.description === "SOFEA Competition" ? "General Assembly Competition" : c.description,
-          };
+      if (comps.length > 0) {
+        let updated = false;
+        const migrated = comps.map((c) => {
+          if (c.name === "Best in Pop Sing & Dance" || c.description === "SOFEA Competition") {
+            updated = true;
+            return {
+              ...c,
+              name: c.name === "Best in Pop Sing & Dance" ? "General Assembly" : c.name,
+              description: c.description === "SOFEA Competition" ? "General Assembly Competition" : c.description,
+            };
+          }
+          return c;
+        });
+        if (updated) {
+          localStorage.setItem("sofea_competitions", JSON.stringify(migrated));
         }
-        return c;
-      });
-      if (updated) {
-        localStorage.setItem("sofea_competitions", JSON.stringify(migrated));
+        return migrated;
       }
-      return migrated;
     }
-    return [];
-  } catch {
-    return [];
-  }
+  } catch {}
+
+  const defaultComp: Competition = {
+    id: "comp_1",
+    name: "General Assembly",
+    academicYear: "2026-2027",
+    description: "General Assembly Competition",
+    guidelines: [
+      "Each performance must strictly last between 3 to 4 minutes.",
+      "Performances that fall short of 3 minutes or exceed 4 minutes will incur a deduction.",
+      "The performance must feature an original song composition in Pop genre.",
+    ],
+    status: "active",
+    createdAt: Date.now(),
+  };
+  try {
+    localStorage.setItem("sofea_competitions", JSON.stringify([defaultComp]));
+  } catch (e) {}
+  return [defaultComp];
 }
 
 function saveLocalCompetitions(comps: Competition[]) {
