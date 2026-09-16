@@ -29,9 +29,9 @@ export default function AdminHome() {
       } else {
         const defaultComp: Competition = {
           id: "comp_1",
-          name: "Best in Pop Sing & Dance",
+          name: "General Assembly",
           academicYear: "2026-2027",
-          description: "SOFEA Competition",
+          description: "General Assembly Competition",
           guidelines: [
             "Performance must strictly last 3 to 4 minutes.",
             "All vocals and choreography must be performed live.",
@@ -60,7 +60,7 @@ export default function AdminHome() {
     await createCompetition({
       name: name.trim(),
       academicYear: academicYear.trim() || "2026-2027",
-      description: description.trim() || "SOFEA Competition",
+      description: description.trim() || "General Assembly Competition",
       guidelines,
       status: "active",
     });
@@ -144,7 +144,7 @@ export default function AdminHome() {
                 <input
                   type="text"
                   className="input"
-                  placeholder="e.g. Best in Pop Sing & Dance"
+                  placeholder="e.g. General Assembly"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required

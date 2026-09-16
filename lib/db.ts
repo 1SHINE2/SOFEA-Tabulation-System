@@ -42,7 +42,26 @@ function getLocalCompetitions(): Competition[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem("sofea_competitions");
-    return raw ? JSON.parse(raw) : [];
+    if (raw) {
+      const comps: Competition[] = JSON.parse(raw);
+      let updated = false;
+      const migrated = comps.map((c) => {
+        if (c.name === "Best in Pop Sing & Dance" || c.description === "SOFEA Competition") {
+          updated = true;
+          return {
+            ...c,
+            name: c.name === "Best in Pop Sing & Dance" ? "General Assembly" : c.name,
+            description: c.description === "SOFEA Competition" ? "General Assembly Competition" : c.description,
+          };
+        }
+        return c;
+      });
+      if (updated) {
+        localStorage.setItem("sofea_competitions", JSON.stringify(migrated));
+      }
+      return migrated;
+    }
+    return [];
   } catch {
     return [];
   }

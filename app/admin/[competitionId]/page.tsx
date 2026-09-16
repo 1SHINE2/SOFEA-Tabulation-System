@@ -85,9 +85,9 @@ export default function AdminDashboard(props: {
         if (!comp) {
           comp = {
             id: competitionId,
-            name: "Best in Pop Sing & Dance",
+            name: "General Assembly",
             academicYear: "2026-2027",
-            description: "SOFEA Competition",
+            description: "General Assembly Competition",
             guidelines: [],
             status: "active",
             createdAt: Date.now(),
@@ -97,9 +97,9 @@ export default function AdminDashboard(props: {
       } catch (err) {
         setCompetition({
           id: competitionId,
-          name: "Best in Pop Sing & Dance",
+          name: "General Assembly",
           academicYear: "2026-2027",
-          description: "SOFEA Competition",
+          description: "General Assembly Competition",
           guidelines: [],
           status: "active",
           createdAt: Date.now(),

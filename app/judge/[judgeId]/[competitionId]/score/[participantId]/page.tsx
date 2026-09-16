@@ -26,9 +26,9 @@ export default function ScoreScreen(props: { params: Promise<{ judgeId: string; 
         } else {
           setCompetition({
             id: params.competitionId,
-            name: 'Best in Pop Sing & Dance',
+            name: 'General Assembly',
             academicYear: '2026-2027',
-            description: 'SOFEA Competition',
+            description: 'General Assembly Competition',
             guidelines: [
               'Each performance must strictly last between 3 to 4 minutes.',
               'Performances that fall short of 3 minutes or exceed 4 minutes will incur a point deduction.',
