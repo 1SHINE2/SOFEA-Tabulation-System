@@ -22,6 +22,7 @@ import type {
   ScoreEntry,
   Judge,
   CriteriaItem,
+  CriteriaSet,
   AwardCategory,
 } from "./types";
 import { DEFAULT_CRITERIA, INITIAL_JUDGES } from "./types";
@@ -134,6 +135,54 @@ function saveLocalJudges(compId: string, judges: Judge[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(`sofea_judges_${compId}`, JSON.stringify(judges));
+    notifyLocalSync();
+  } catch (e) {}
+}
+
+export function getAllLocalJudges(): Judge[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const list: Judge[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("sofea_judges_")) {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const items: Judge[] = JSON.parse(raw);
+          list.push(...items);
+        }
+      }
+    }
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+function getLocalCriteriaSets(compId: string): CriteriaSet[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`sofea_crit_sets_${compId}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+
+  const defaultItems = getLocalCriteria(compId);
+  return [
+    {
+      id: "set_default",
+      name: "Main Competition Criteria",
+      competitionId: compId,
+      isActive: true,
+      items: defaultItems,
+      createdAt: 1,
+    },
+  ];
+}
+
+function saveLocalCriteriaSets(compId: string, sets: CriteriaSet[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`sofea_crit_sets_${compId}`, JSON.stringify(sets));
     notifyLocalSync();
   } catch (e) {}
 }
@@ -367,6 +416,118 @@ export async function deleteCriteriaItem(competitionId: string, itemId: string):
   const current = getLocalCriteria(competitionId);
   const updated = current.filter((c) => c.id !== itemId && c.key !== itemId);
   saveLocalCriteria(competitionId, updated);
+}
+
+// ─── Criteria Sets ─────────────────────────────────────────────────────────────
+
+export function subscribeCriteriaSets(
+  competitionId: string,
+  callback: (sets: CriteriaSet[]) => void
+): Unsubscribe {
+  callback(getLocalCriteriaSets(competitionId));
+
+  function handleLocalEvent() {
+    callback(getLocalCriteriaSets(competitionId));
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener(SYNC_EVENT, handleLocalEvent);
+    window.addEventListener("storage", handleLocalEvent);
+  }
+
+  return () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener(SYNC_EVENT, handleLocalEvent);
+      window.removeEventListener("storage", handleLocalEvent);
+    }
+  };
+}
+
+export async function addCriteriaSet(
+  competitionId: string,
+  name: string
+): Promise<CriteriaSet> {
+  const newSet: CriteriaSet = {
+    id: "set_" + Date.now(),
+    name,
+    competitionId,
+    isActive: true,
+    items: [],
+    createdAt: Date.now(),
+  };
+  const current = getLocalCriteriaSets(competitionId);
+  const updated = [...current, newSet];
+  saveLocalCriteriaSets(competitionId, updated);
+  return newSet;
+}
+
+export async function deleteCriteriaSet(
+  competitionId: string,
+  setId: string
+): Promise<void> {
+  const current = getLocalCriteriaSets(competitionId);
+  const updated = current.filter((s) => s.id !== setId);
+  saveLocalCriteriaSets(competitionId, updated);
+}
+
+export async function toggleCriteriaSetActive(
+  competitionId: string,
+  setId: string,
+  isActive: boolean
+): Promise<void> {
+  const current = getLocalCriteriaSets(competitionId);
+  const updated = current.map((s) => (s.id === setId ? { ...s, isActive } : s));
+  saveLocalCriteriaSets(competitionId, updated);
+}
+
+export async function addCriteriaItemToSet(
+  competitionId: string,
+  setId: string,
+  item: Omit<CriteriaItem, "id" | "key">
+): Promise<CriteriaItem> {
+  const sets = getLocalCriteriaSets(competitionId);
+  let totalCount = 0;
+  sets.forEach((s) => (totalCount += s.items.length));
+
+  const key = "c" + (totalCount + 1);
+  const newItem: CriteriaItem = {
+    id: "crit_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+    key,
+    ...item,
+    setId,
+  };
+
+  const updated = sets.map((s) => {
+    if (s.id === setId) {
+      return { ...s, items: [...s.items, newItem] };
+    }
+    return s;
+  });
+
+  saveLocalCriteriaSets(competitionId, updated);
+
+  const allFlat = updated.flatMap((s) => s.items);
+  saveLocalCriteria(competitionId, allFlat);
+
+  return newItem;
+}
+
+export async function deleteCriteriaItemFromSet(
+  competitionId: string,
+  setId: string,
+  itemId: string
+): Promise<void> {
+  const sets = getLocalCriteriaSets(competitionId);
+  const updated = sets.map((s) => {
+    if (s.id === setId) {
+      return { ...s, items: s.items.filter((i) => i.id !== itemId && i.key !== itemId) };
+    }
+    return s;
+  });
+  saveLocalCriteriaSets(competitionId, updated);
+
+  const allFlat = updated.flatMap((s) => s.items);
+  saveLocalCriteria(competitionId, allFlat);
 }
 
 // ─── Award Categories ("Ways to Win") ─────────────────────────────────────────

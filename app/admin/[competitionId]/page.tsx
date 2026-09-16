@@ -13,6 +13,12 @@ import {
   subscribeCriteria,
   addCriteriaItem,
   deleteCriteriaItem,
+  subscribeCriteriaSets,
+  addCriteriaSet,
+  deleteCriteriaSet,
+  toggleCriteriaSetActive,
+  addCriteriaItemToSet,
+  deleteCriteriaItemFromSet,
   subscribeAwards,
   addAwardCategory,
   renameAwardCategory,
@@ -24,6 +30,7 @@ import {
   type Competition,
   type Judge,
   type CriteriaItem,
+  type CriteriaSet,
   type AwardCategory,
 } from "@/lib/types";
 import styles from "./page.module.css";
@@ -74,6 +81,7 @@ export default function AdminDashboard(props: {
 
   const [judges, setJudges] = useState<Judge[]>([]);
   const [criteria, setCriteria] = useState<CriteriaItem[]>([]);
+  const [criteriaSets, setCriteriaSets] = useState<CriteriaSet[]>([]);
   const [awards, setAwards] = useState<AwardCategory[]>([]);
 
   const [activeTab, setActiveTab] = useState("participants");
@@ -112,11 +120,13 @@ export default function AdminDashboard(props: {
 
     const unsubJudges = subscribeJudges(competitionId, (j) => setJudges(j));
     const unsubCrit = subscribeCriteria(competitionId, (c) => setCriteria(c));
+    const unsubCritSets = subscribeCriteriaSets(competitionId, (cs) => setCriteriaSets(cs));
     const unsubAwards = subscribeAwards(competitionId, (a) => setAwards(a));
 
     return () => {
       unsubJudges();
       unsubCrit();
+      unsubCritSets();
       unsubAwards();
     };
   }, [competitionId]);
@@ -185,10 +195,10 @@ export default function AdminDashboard(props: {
           <TabJudges compId={competitionId} judges={judges} />
         )}
         {activeTab === "criteria" && (
-          <TabCriteria compId={competitionId} criteria={criteria} />
+          <TabCriteria compId={competitionId} criteriaSets={criteriaSets} criteria={criteria} />
         )}
         {activeTab === "status" && (
-          <TabStatus participants={participants} scores={scores} judges={judges} criteria={criteria} />
+          <TabStatus compId={competitionId} participants={participants} scores={scores} judges={judges} criteria={criteria} criteriaSets={criteriaSets} />
         )}
         {activeTab === "live" && (
           <TabLive results={results} judges={judges} criteria={criteria} />
@@ -390,24 +400,65 @@ function TabJudges({ compId, judges }: { compId: string; judges: Judge[] }) {
   );
 }
 
-// ─── 3. Criteria Tab (Dynamic Builder + Rubric System + Delete) ───────────────
+// ─── 3. Criteria Tab (Dynamic Multi-Set Builder + Rubric System) ─────────────
 
-function TabCriteria({ compId, criteria }: { compId: string; criteria: CriteriaItem[] }) {
+function TabCriteria({
+  compId,
+  criteriaSets,
+  criteria,
+}: {
+  compId: string;
+  criteriaSets: CriteriaSet[];
+  criteria: CriteriaItem[];
+}) {
+  const [showAddSet, setShowAddSet] = useState(false);
+  const [newSetName, setNewSetName] = useState("");
+  const [activeSetId, setActiveSetId] = useState<string | null>(null);
+
   const [label, setLabel] = useState("");
   const [weight, setWeight] = useState("");
   const [rubric5, setRubric5] = useState("");
   const [rubric1, setRubric1] = useState("");
 
-  const totalWeight = criteria.reduce((sum, c) => sum + (c.weight || 0), 0);
+  const effectiveSets =
+    criteriaSets.length > 0
+      ? criteriaSets
+      : [
+          {
+            id: "set_default",
+            name: "Main Competition Criteria",
+            competitionId: compId,
+            isActive: true,
+            items: criteria,
+            createdAt: 1,
+          },
+        ];
 
-  async function handleAddCriteria(e: React.FormEvent) {
+  async function handleCreateSet(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newSetName.trim()) return;
+    await addCriteriaSet(compId, newSetName.trim());
+    setNewSetName("");
+    setShowAddSet(false);
+  }
+
+  async function handleDeleteSet(setId: string, name: string) {
+    if (!confirm(`Are you sure you want to delete criteria set "${name}"?`)) return;
+    await deleteCriteriaSet(compId, setId);
+  }
+
+  async function handleToggleSetActive(setId: string, currentActive: boolean) {
+    await toggleCriteriaSetActive(compId, setId, !currentActive);
+  }
+
+  async function handleAddCriteriaToSet(setId: string, e: React.FormEvent) {
     e.preventDefault();
     if (!label.trim() || !weight) return;
 
     const colors = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4"];
     const color = colors[criteria.length % colors.length];
 
-    await addCriteriaItem(compId, {
+    await addCriteriaItemToSet(compId, setId, {
       label: label.trim(),
       weight: parseFloat(weight),
       color,
@@ -424,98 +475,189 @@ function TabCriteria({ compId, criteria }: { compId: string; criteria: CriteriaI
     setWeight("");
     setRubric5("");
     setRubric1("");
+    setActiveSetId(null);
   }
 
-  async function handleDeleteCriteria(id: string, name: string) {
+  async function handleDeleteItemFromSet(setId: string, itemId: string, name: string) {
     if (!confirm(`Are you sure you want to delete criteria "${name}"?`)) return;
-    await deleteCriteriaItem(compId, id);
+    await deleteCriteriaItemFromSet(compId, setId, itemId);
   }
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <h3 style={{ margin: 0 }}>Criteria Sets & Point Rubrics</h3>
           <p style={{ fontSize: "0.88rem", color: "var(--color-text-muted)", margin: "0.2rem 0 0 0" }}>
-            Configure criteria names, percentage weights, and scoring rubrics for this event.
+            Configure criteria sets, percentage weights, and scoring rubrics for this event.
           </p>
         </div>
-        <span className={`badge ${totalWeight === 100 ? "badge-success" : "badge-warning"}`} style={{ fontSize: "0.9rem" }}>
-          Total Weight: {totalWeight}% {totalWeight === 100 ? "✓ (Balanced)" : "(Should sum to 100%)"}
-        </span>
+        <button className="btn btn-primary" onClick={() => setShowAddSet(!showAddSet)}>
+          <Plus size={16} /> Make Another Set of Criteria
+        </button>
       </div>
 
-      {/* Add Criteria Form */}
-      <form onSubmit={handleAddCriteria} className="card" style={{ padding: "1.25rem", marginBottom: "1.5rem", background: "var(--gray-50)" }}>
-        <h4 style={{ margin: "0 0 1rem 0", color: "var(--blue-900)" }}>Add New Criteria Item</h4>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: "1rem", marginBottom: "1rem" }}>
-          <input
-            type="text"
-            placeholder="Criteria Title (e.g. Vocal Execution)"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            className="input"
-            required
-          />
-          <input
-            type="number"
-            placeholder="Weight (%)"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            className="input"
-            min="1"
-            max="100"
-            required
-          />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-          <input
-            type="text"
-            placeholder="Description for Score 5 (Outstanding)"
-            value={rubric5}
-            onChange={(e) => setRubric5(e.target.value)}
-            className="input"
-          />
-          <input
-            type="text"
-            placeholder="Description for Score 1 (Needs Improvement)"
-            value={rubric1}
-            onChange={(e) => setRubric1(e.target.value)}
-            className="input"
-          />
-        </div>
-        <button type="submit" className="btn btn-primary" style={{ alignSelf: "flex-start" }}>
-          <Plus size={16} /> Add Criteria Item
-        </button>
-      </form>
-
-      {/* Criteria List */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        {criteria.map((c) => (
-          <div key={c.id || c.key} className="card" style={{ padding: "1.25rem", borderLeft: `5px solid ${c.color}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <h4 style={{ margin: 0, fontSize: "1.1rem", color: "var(--blue-900)" }}>{c.label}</h4>
-                <span className="badge badge-primary">{c.weight}% Weight</span>
-              </div>
-              <button
-                onClick={() => handleDeleteCriteria(c.id || c.key, c.label)}
-                className="btn btn-ghost"
-                style={{ padding: "0.3rem", color: "var(--color-danger)" }}
-                title="Delete Criteria"
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-            <div style={{ fontSize: "0.85rem", color: "var(--gray-600)" }}>
-              <strong>Point System Rubric:</strong>
-              <ul style={{ paddingLeft: "1.2rem", marginTop: "0.25rem", margin: 0 }}>
-                <li>Score 5: {c.rubric[5]}</li>
-                <li>Score 1: {c.rubric[1]}</li>
-              </ul>
-            </div>
+      {showAddSet && (
+        <form onSubmit={handleCreateSet} className="card" style={{ padding: "1.25rem", marginBottom: "1.5rem", background: "var(--blue-50)", border: "1px solid var(--blue-200)" }}>
+          <h4 style={{ margin: "0 0 0.8rem 0", color: "var(--blue-900)" }}>Create New Criteria Set</h4>
+          <div style={{ display: "flex", gap: "0.8rem" }}>
+            <input
+              type="text"
+              placeholder="Set Name (e.g. Special Awards Criteria, Set 2: Choreography)"
+              value={newSetName}
+              onChange={(e) => setNewSetName(e.target.value)}
+              className="input"
+              required
+            />
+            <button type="submit" className="btn btn-primary" style={{ whiteSpace: "nowrap" }}>
+              Create Set
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => setShowAddSet(false)}>
+              Cancel
+            </button>
           </div>
-        ))}
+        </form>
+      )}
+
+      {/* Render Each Criteria Set */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+        {effectiveSets.map((set) => {
+          const setTotalWeight = set.items.reduce((sum, item) => sum + (item.weight || 0), 0);
+
+          return (
+            <div key={set.id} className="card" style={{ padding: "1.5rem", border: "1.5px solid var(--color-border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.8rem" }}>
+                  <h4 style={{ margin: 0, fontSize: "1.2rem", color: "var(--blue-950)" }}>{set.name}</h4>
+                  <button
+                    onClick={() => handleToggleSetActive(set.id, set.isActive)}
+                    className={`badge ${set.isActive ? "badge-success" : "badge-neutral"}`}
+                    style={{ border: "none", cursor: "pointer", fontSize: "0.82rem" }}
+                  >
+                    {set.isActive ? "✓ Active for Judges" : "○ Inactive"}
+                  </button>
+                  <span className={`badge ${setTotalWeight === 100 ? "badge-primary" : "badge-warning"}`}>
+                    Weight: {setTotalWeight}% {setTotalWeight === 100 ? "✓ (Balanced)" : "(Target 100%)"}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    onClick={() => setActiveSetId(activeSetId === set.id ? null : set.id)}
+                    className="btn btn-ghost"
+                    style={{ fontSize: "0.85rem" }}
+                  >
+                    <Plus size={16} /> Add Criteria to Set
+                  </button>
+                  {effectiveSets.length > 1 && (
+                    <button
+                      onClick={() => handleDeleteSet(set.id, set.name)}
+                      className="btn btn-ghost"
+                      style={{ color: "var(--color-danger)" }}
+                      title="Delete Criteria Set"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Add item form inside set */}
+              {activeSetId === set.id && (
+                <form
+                  onSubmit={(e) => handleAddCriteriaToSet(set.id, e)}
+                  style={{ padding: "1rem", borderRadius: "8px", background: "var(--gray-50)", marginBottom: "1rem" }}
+                >
+                  <h5 style={{ margin: "0 0 0.8rem 0" }}>Add Criteria Item to "{set.name}"</h5>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: "1rem", marginBottom: "0.8rem" }}>
+                    <input
+                      type="text"
+                      placeholder="Criteria Title (e.g. Vocal Technique)"
+                      value={label}
+                      onChange={(e) => setLabel(e.target.value)}
+                      className="input"
+                      required
+                    />
+                    <input
+                      type="number"
+                      placeholder="Weight (%)"
+                      value={weight}
+                      onChange={(e) => setWeight(e.target.value)}
+                      className="input"
+                      min="1"
+                      max="100"
+                      required
+                    />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "0.8rem" }}>
+                    <input
+                      type="text"
+                      placeholder="Description for Score 5 (Outstanding)"
+                      value={rubric5}
+                      onChange={(e) => setRubric5(e.target.value)}
+                      className="input"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Description for Score 1 (Needs Improvement)"
+                      value={rubric1}
+                      onChange={(e) => setRubric1(e.target.value)}
+                      className="input"
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button type="submit" className="btn btn-primary">
+                      Save Item
+                    </button>
+                    <button type="button" className="btn btn-ghost" onClick={() => setActiveSetId(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Items List in this Set */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+                {set.items.map((item) => (
+                  <div
+                    key={item.id || item.key}
+                    style={{
+                      padding: "1rem",
+                      borderRadius: "8px",
+                      background: "#ffffff",
+                      border: "1px solid var(--color-border)",
+                      borderLeft: `5px solid ${item.color || "#3b82f6"}`,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <strong>{item.label}</strong>
+                        <span className="badge badge-primary">{item.weight}% Weight</span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteItemFromSet(set.id, item.id || item.key, item.label)}
+                        className="btn btn-ghost"
+                        style={{ padding: "0.3rem", color: "var(--color-danger)" }}
+                        title="Delete Item"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    {item.rubric && (
+                      <div style={{ fontSize: "0.82rem", color: "var(--gray-600)", marginTop: "0.4rem" }}>
+                        Score 5: {item.rubric[5]} • Score 1: {item.rubric[1]}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {set.items.length === 0 && (
+                  <div style={{ fontSize: "0.88rem", color: "var(--gray-500)", fontStyle: "italic", padding: "0.5rem 0" }}>
+                    No criteria items in this set yet. Click "Add Criteria to Set" above.
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -524,21 +666,53 @@ function TabCriteria({ compId, criteria }: { compId: string; criteria: CriteriaI
 // ─── 4. Judge Status Tab (Per Participant + Matrix Overview) ──────────────────
 
 function TabStatus({
+  compId,
   participants,
   scores,
   judges,
   criteria,
+  criteriaSets,
 }: {
+  compId: string;
   participants: any[];
   scores: any[];
   judges: Judge[];
   criteria: CriteriaItem[];
+  criteriaSets: CriteriaSet[];
 }) {
   const [viewMode, setViewMode] = useState<"participant" | "matrix">("participant");
   const activeJudges = judges.length > 0 ? judges : INITIAL_JUDGES;
 
   return (
     <div>
+      {/* Criteria Set Active Selector Bar for Admin */}
+      {criteriaSets.length > 0 && (
+        <div className="card" style={{ padding: "1rem 1.25rem", marginBottom: "1.5rem", background: "var(--blue-50)", border: "1px solid var(--blue-200)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.8rem" }}>
+            <div>
+              <div style={{ fontWeight: 600, color: "var(--blue-900)", fontSize: "0.95rem" }}>
+                Active Criteria Sets for Scoring
+              </div>
+              <div style={{ fontSize: "0.82rem", color: "var(--gray-600)" }}>
+                Select which criteria sets are active and visible for judges to score in real-time.
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              {criteriaSets.map((set) => (
+                <button
+                  key={set.id}
+                  onClick={() => toggleCriteriaSetActive(compId, set.id, !set.isActive)}
+                  className={`btn ${set.isActive ? "btn-primary" : "btn-ghost"}`}
+                  style={{ padding: "0.35rem 0.8rem", fontSize: "0.82rem" }}
+                >
+                  {set.isActive ? "✓ " : "○ "} {set.name} ({set.items.length} items)
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <h3 style={{ margin: 0 }}>Judge Submission & Criteria Progress</h3>

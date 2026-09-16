@@ -1,8 +1,9 @@
 // lib/auth.ts
 // ─── PIN-Based Authentication ─────────────────────────────────────────────────
 
-import { JUDGES, ADMIN_PIN } from "./types";
+import { ADMIN_PIN } from "./types";
 import type { Judge, UserRole } from "./types";
+import { getAllLocalJudges } from "./db";
 
 export interface Session {
   role: UserRole;
@@ -22,8 +23,9 @@ export function validatePin(pin: string): Session | null {
     return { role: "admin" };
   }
 
-  // Check judge PINs
-  const judge = JUDGES.find((j) => j.pin === pin);
+  // Check dynamic judges from all competitions
+  const judges = getAllLocalJudges();
+  const judge = judges.find((j) => j.pin === pin);
   if (judge) {
     return { role: "judge", judgeId: judge.id, judgeName: judge.name };
   }
@@ -54,14 +56,16 @@ export function saveSession(session: Session): void {
  * Load session from localStorage.
  */
 export function getSession(): Session | null {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as Session;
-  } catch {
-    return null;
+  if (typeof window !== "undefined") {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as Session;
+    } catch {
+      return null;
+    }
   }
+  return null;
 }
 
 /**
@@ -77,5 +81,6 @@ export function clearSession(): void {
  * Get judge info by ID.
  */
 export function getJudgeById(judgeId: string): Judge | undefined {
-  return JUDGES.find((j) => j.id === judgeId);
+  const judges = getAllLocalJudges();
+  return judges.find((j) => j.id === judgeId);
 }

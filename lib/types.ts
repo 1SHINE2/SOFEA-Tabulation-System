@@ -35,12 +35,14 @@ export interface CriteriaItem {
   weight: number; // percentage (e.g. 30)
   color: string;
   rubric: Record<number, string>; // score 1-5 -> description
+  setId?: string;
 }
 
 export interface CriteriaSet {
   id: string;
   name: string;
   competitionId: string;
+  isActive: boolean;
   items: CriteriaItem[];
   createdAt: number;
 }
@@ -166,13 +168,7 @@ export const CRITERIA = DEFAULT_CRITERIA;
 
 // ─── Initial Default Judges (for seed fallback) ────────────────────────────────
 
-export const INITIAL_JUDGES: Judge[] = [
-  { id: "judge_1", name: "Llanabelle O. Lañojan", pin: "1001" },
-  { id: "judge_2", name: "Katrina Jan Alexa Rule-Shima", pin: "1002" },
-  { id: "judge_3", name: "BJ Marie S. Pagula", pin: "1003" },
-  { id: "judge_4", name: "Roselyn I. Tisoy", pin: "1004" },
-  { id: "judge_5", name: "Jhon Carlo G. Bacalla", pin: "1005" },
-];
+export const INITIAL_JUDGES: Judge[] = [];
 
 export const JUDGES = INITIAL_JUDGES;
 
