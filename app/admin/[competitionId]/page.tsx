@@ -688,11 +688,11 @@ function TabStatus({
 
   return (
     <div>
-      {/* Assign Judges per Way to Win Card */}
+      {/* Assign Judges per Award Category Card */}
       {awards.length > 0 && judges.length > 0 && (
         <div className="card" style={{ padding: "1.25rem", marginBottom: "1.5rem", background: "var(--blue-50)", border: "1px solid var(--blue-200)" }}>
           <h4 style={{ margin: "0 0 0.5rem 0", color: "var(--blue-900)" }}>
-            Assign Judges to "Ways to Win" Categories
+            Assign Judges to Award Categories
           </h4>
           <p style={{ fontSize: "0.85rem", color: "var(--gray-600)", margin: "0 0 1rem 0" }}>
             Select which judges are assigned to score each specific award category.
@@ -1302,9 +1302,9 @@ function TabSummary({
           </div>
         </div>
 
-        {/* Custom "Ways to Win" Award Creator */}
+        {/* Custom Award Category Creator */}
         <div className="card" style={{ padding: "1.25rem", marginBottom: "2rem", background: "var(--gray-50)" }}>
-          <h4 style={{ margin: "0 0 0.5rem 0", color: "var(--blue-900)" }}>Add Custom "Ways to Win" Award Category</h4>
+          <h4 style={{ margin: "0 0 0.5rem 0", color: "var(--blue-900)" }}>Add Custom Award Category</h4>
           <p style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", marginBottom: "1rem" }}>
             Select which criteria are used to determine winners for this award category.
           </p>

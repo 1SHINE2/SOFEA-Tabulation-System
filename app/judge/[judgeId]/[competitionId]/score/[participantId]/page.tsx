@@ -103,7 +103,7 @@ export default function ScoreScreen(props: {
       ? activeSets.flatMap((s) => s.items)
       : (DEFAULT_CRITERIA as any);
 
-  // Map criteria key to associated Award Categories ("Ways to Win") / Sets
+  // Map criteria key to associated Award Categories / Sets
   const criterionAwardsMap: Record<string, string[]> = {};
   activeCriteria.forEach((c) => {
     criterionAwardsMap[c.key] = [];
