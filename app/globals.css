@@ -250,6 +250,14 @@ tr:hover td { background: var(--blue-50); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ─── Print Global Override ─────────────────────────────────────────────────── */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}
+
 /* ─── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   h1 { font-size: 1.6rem; }

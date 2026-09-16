@@ -4,9 +4,11 @@
 export type UserRole = "judge" | "admin";
 
 export interface Judge {
-  id: string; // "judge_1" ... "judge_5"
+  id: string; // e.g. "judge_172648..."
   name: string;
   pin: string;
+  competitionId?: string;
+  addedAt?: number;
 }
 
 export interface Competition {
@@ -26,52 +28,86 @@ export interface Participant {
   addedAt: number;
 }
 
-export interface CriteriaScore {
-  c1: number; // Thematic Songwriting (30%)
-  c2: number; // Musicality & Pop Vocal Execution (25%)
-  c3: number; // Choreography & Synchronization (25%)
-  c4: number; // Showmanship & Audience Impact (20%)
+export interface CriteriaItem {
+  id: string; // e.g. "c1", "c2", "crit_123"
+  key: string;
+  label: string;
+  weight: number; // percentage (e.g. 30)
+  color: string;
+  rubric: Record<number, string>; // score 1-5 -> description
 }
 
-export interface ScoreEntry extends CriteriaScore {
+export interface CriteriaSet {
+  id: string;
+  name: string;
+  competitionId: string;
+  items: CriteriaItem[];
+  createdAt: number;
+}
+
+export interface AwardCategory {
+  id: string;
+  name: string;
+  competitionId: string;
+  criteriaKeys: string[]; // array of criteria keys included e.g. ["c1", "c2"]
+  createdAt: number;
+}
+
+export interface CriteriaScore {
+  c1?: number;
+  c2?: number;
+  c3?: number;
+  c4?: number;
+  [key: string]: number | undefined;
+}
+
+export type ScoreEntry = {
   judgeId: string;
   participantId: string;
   competitionId: string;
   isDraft: boolean;
   submittedAt: number | null;
-}
+  c1?: number;
+  c2?: number;
+  c3?: number;
+  c4?: number;
+  [key: string]: any;
+};
 
 // ─── Computed/Derived Types ────────────────────────────────────────────────────
 
 export interface WeightedScore {
   raw: CriteriaScore;
   weighted: number; // out of 100
-  vocalScore: number; // c1 + c2 (raw, out of 10)
-  choreoScore: number; // c3 + c4 (raw, out of 10)
+  vocalScore: number; // percentage out of 100%
+  choreoScore: number; // percentage out of 100%
+  awardScores?: Record<string, number>; // awardId -> score %
 }
 
 export interface ParticipantResult {
   participant: Participant;
   judgeScores: Record<string, WeightedScore>; // judgeId -> score
   averageWeighted: number; // avg across all judges, out of 100
-  averageVocal: number; // avg (c1+c2) across all judges
-  averageChoreo: number; // avg (c3+c4) across all judges
+  averageVocal: number;
+  averageChoreo: number;
+  awardAverages?: Record<string, number>; // awardId -> avg score
   rank: number;
   vocalRank: number;
   choreoRank: number;
+  awardRanks?: Record<string, number>; // awardId -> rank
 }
 
 // ─── Criteria Metadata ────────────────────────────────────────────────────────
 
 export interface CriteriaInfo {
-  key: keyof CriteriaScore;
+  key: string;
   label: string;
   weight: number; // percentage
   color: string;
   rubric: Record<number, string>; // score 1-5 -> description
 }
 
-export const CRITERIA: CriteriaInfo[] = [
+export const DEFAULT_CRITERIA: CriteriaInfo[] = [
   {
     key: "c1",
     label: "Thematic Songwriting",
@@ -126,14 +162,18 @@ export const CRITERIA: CriteriaInfo[] = [
   },
 ];
 
-// ─── Judges Reference Data ────────────────────────────────────────────────────
+export const CRITERIA = DEFAULT_CRITERIA;
 
-export const JUDGES: Judge[] = [
-  { id: "judge_1", name: "Llanabelle O. Lañojan", pin: process.env.NEXT_PUBLIC_PIN_JUDGE_1 || "1001" },
-  { id: "judge_2", name: "Katrina Jan Alexa Rule-Shima", pin: process.env.NEXT_PUBLIC_PIN_JUDGE_2 || "1002" },
-  { id: "judge_3", name: "BJ Marie S. Pagula", pin: process.env.NEXT_PUBLIC_PIN_JUDGE_3 || "1003" },
-  { id: "judge_4", name: "Roselyn I. Tisoy", pin: process.env.NEXT_PUBLIC_PIN_JUDGE_4 || "1004" },
-  { id: "judge_5", name: "Jhon Carlo G. Bacalla", pin: process.env.NEXT_PUBLIC_PIN_JUDGE_5 || "1005" },
+// ─── Initial Default Judges (for seed fallback) ────────────────────────────────
+
+export const INITIAL_JUDGES: Judge[] = [
+  { id: "judge_1", name: "Llanabelle O. Lañojan", pin: "1001" },
+  { id: "judge_2", name: "Katrina Jan Alexa Rule-Shima", pin: "1002" },
+  { id: "judge_3", name: "BJ Marie S. Pagula", pin: "1003" },
+  { id: "judge_4", name: "Roselyn I. Tisoy", pin: "1004" },
+  { id: "judge_5", name: "Jhon Carlo G. Bacalla", pin: "1005" },
 ];
+
+export const JUDGES = INITIAL_JUDGES;
 
 export const ADMIN_PIN = process.env.NEXT_PUBLIC_PIN_ADMIN || "0000";

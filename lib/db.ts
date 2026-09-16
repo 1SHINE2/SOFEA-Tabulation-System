@@ -16,9 +16,16 @@ import {
   Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { Competition, Participant, ScoreEntry } from "./types";
+import type {
+  Competition,
+  Participant,
+  ScoreEntry,
+  Judge,
+  CriteriaItem,
+  AwardCategory,
+} from "./types";
+import { DEFAULT_CRITERIA, INITIAL_JUDGES } from "./types";
 
-// Helper for local event broadcast across same window & cross-tab
 const SYNC_EVENT = "sofea_tabulation_db_sync";
 
 function notifyLocalSync() {
@@ -26,12 +33,28 @@ function notifyLocalSync() {
   window.dispatchEvent(new CustomEvent(SYNC_EVENT));
   try {
     localStorage.setItem("sofea_sync_ping", Date.now().toString());
-  } catch (e) {
-    // ignore quota/privacy errors
-  }
+  } catch (e) {}
 }
 
 // ─── LocalStorage Cache Helpers ────────────────────────────────────────────────
+
+function getLocalCompetitions(): Competition[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem("sofea_competitions");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalCompetitions(comps: Competition[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem("sofea_competitions", JSON.stringify(comps));
+    notifyLocalSync();
+  } catch (e) {}
+}
 
 function getLocalParticipants(compId: string): Participant[] {
   if (typeof window === "undefined") return [];
@@ -79,60 +102,316 @@ function saveLocalScores(compId: string, scores: ScoreEntry[]) {
   } catch (e) {}
 }
 
+function getLocalJudges(compId: string): Judge[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`sofea_judges_${compId}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+function saveLocalJudges(compId: string, judges: Judge[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`sofea_judges_${compId}`, JSON.stringify(judges));
+    notifyLocalSync();
+  } catch (e) {}
+}
+
+function getLocalCriteria(compId: string): CriteriaItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`sofea_criteria_${compId}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return DEFAULT_CRITERIA.map((c, i) => ({
+    id: c.key,
+    key: c.key,
+    label: c.label,
+    weight: c.weight,
+    color: c.color,
+    rubric: c.rubric,
+  }));
+}
+
+function saveLocalCriteria(compId: string, items: CriteriaItem[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`sofea_criteria_${compId}`, JSON.stringify(items));
+    notifyLocalSync();
+  } catch (e) {}
+}
+
+function getLocalAwards(compId: string): AwardCategory[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`sofea_awards_${compId}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [
+    {
+      id: "award_vocal",
+      name: "Best in Vocal Execution",
+      competitionId: compId,
+      criteriaKeys: ["c1", "c2"],
+      createdAt: 1,
+    },
+    {
+      id: "award_choreo",
+      name: "Best in Pop Choreography",
+      competitionId: compId,
+      criteriaKeys: ["c3", "c4"],
+      createdAt: 2,
+    },
+  ];
+}
+
+function saveLocalAwards(compId: string, awards: AwardCategory[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`sofea_awards_${compId}`, JSON.stringify(awards));
+    notifyLocalSync();
+  } catch (e) {}
+}
+
 // ─── Competitions ─────────────────────────────────────────────────────────────
 
 export async function getCompetitions(): Promise<Competition[]> {
   try {
     const snap = await getDocs(collection(db, "competitions"));
     if (snap.docs.length > 0) {
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Competition));
+      const comps = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Competition));
+      saveLocalCompetitions(comps);
+      return comps;
     }
   } catch (err) {
-    console.warn("Firestore unavailable, using local competition state.");
+    console.warn("Firestore unavailable, using local competitions.");
   }
-  return [];
+  return getLocalCompetitions();
 }
 
 export async function getCompetition(id: string): Promise<Competition | null> {
+  const localList = getLocalCompetitions();
+  const found = localList.find((c) => c.id === id);
+  if (found) return found;
+
   try {
     const snap = await getDoc(doc(db, "competitions", id));
     if (snap.exists()) {
       return { id: snap.id, ...snap.data() } as Competition;
     }
-  } catch (err) {
-    console.warn("Firestore unavailable, fallback competition used.");
-  }
+  } catch (err) {}
   return null;
 }
 
-export async function createCompetition(data: Omit<Competition, "id" | "createdAt">): Promise<string> {
+export async function createCompetition(
+  data: Omit<Competition, "id" | "createdAt">
+): Promise<string> {
   const compId = "comp_" + Date.now();
+  const newComp: Competition = {
+    id: compId,
+    ...data,
+    createdAt: Date.now(),
+  };
+
+  const current = getLocalCompetitions();
+  saveLocalCompetitions([...current, newComp]);
+
   try {
-    const ref = await addDoc(collection(db, "competitions"), {
-      ...data,
-      createdAt: Date.now(),
-    });
-    return ref.id;
-  } catch (err) {
-    return compId;
-  }
+    await setDoc(doc(db, "competitions", compId), newComp);
+  } catch (err) {}
+
+  return compId;
+}
+
+export async function deleteCompetition(competitionId: string): Promise<void> {
+  const current = getLocalCompetitions();
+  const updated = current.filter((c) => c.id !== competitionId);
+  saveLocalCompetitions(updated);
+
+  try {
+    await deleteDoc(doc(db, "competitions", competitionId));
+  } catch (err) {}
 }
 
 export async function updateCompetitionStatus(
   competitionId: string,
   status: Competition["status"]
 ): Promise<void> {
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem(`sofea_comp_status_${competitionId}`, status);
-      notifyLocalSync();
-    } catch (e) {}
-  }
+  const current = getLocalCompetitions();
+  const updated = current.map((c) => (c.id === competitionId ? { ...c, status } : c));
+  saveLocalCompetitions(updated);
+
   try {
     await updateDoc(doc(db, "competitions", competitionId), { status });
-  } catch (err) {
-    console.warn("Firestore status update bypassed locally.");
+  } catch (err) {}
+}
+
+// ─── Judges Management ────────────────────────────────────────────────────────
+
+export function subscribeJudges(
+  competitionId: string,
+  callback: (judges: Judge[]) => void
+): Unsubscribe {
+  callback(getLocalJudges(competitionId));
+
+  function handleLocalEvent() {
+    callback(getLocalJudges(competitionId));
   }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener(SYNC_EVENT, handleLocalEvent);
+    window.addEventListener("storage", handleLocalEvent);
+  }
+
+  return () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener(SYNC_EVENT, handleLocalEvent);
+      window.removeEventListener("storage", handleLocalEvent);
+    }
+  };
+}
+
+export function generateRandomPin(): string {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+export async function addJudge(competitionId: string, name: string): Promise<Judge> {
+  const judgeId = "judge_" + Date.now() + "_" + Math.random().toString(36).substring(2, 5);
+  const pin = generateRandomPin();
+  const newJudge: Judge = {
+    id: judgeId,
+    name,
+    pin,
+    competitionId,
+    addedAt: Date.now(),
+  };
+
+  const current = getLocalJudges(competitionId);
+  const updated = [...current, newJudge];
+  saveLocalJudges(competitionId, updated);
+
+  return newJudge;
+}
+
+export async function deleteJudge(competitionId: string, judgeId: string): Promise<void> {
+  const current = getLocalJudges(competitionId);
+  const updated = current.filter((j) => j.id !== judgeId);
+  saveLocalJudges(competitionId, updated);
+}
+
+// ─── Criteria Management ──────────────────────────────────────────────────────
+
+export function subscribeCriteria(
+  competitionId: string,
+  callback: (items: CriteriaItem[]) => void
+): Unsubscribe {
+  callback(getLocalCriteria(competitionId));
+
+  function handleLocalEvent() {
+    callback(getLocalCriteria(competitionId));
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener(SYNC_EVENT, handleLocalEvent);
+    window.addEventListener("storage", handleLocalEvent);
+  }
+
+  return () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener(SYNC_EVENT, handleLocalEvent);
+      window.removeEventListener("storage", handleLocalEvent);
+    }
+  };
+}
+
+export async function addCriteriaItem(
+  competitionId: string,
+  item: Omit<CriteriaItem, "id" | "key">
+): Promise<CriteriaItem> {
+  const current = getLocalCriteria(competitionId);
+  const key = "c" + (current.length + 1);
+  const newItem: CriteriaItem = {
+    id: "crit_" + Date.now(),
+    key,
+    ...item,
+  };
+
+  const updated = [...current, newItem];
+  saveLocalCriteria(competitionId, updated);
+
+  return newItem;
+}
+
+export async function deleteCriteriaItem(competitionId: string, itemId: string): Promise<void> {
+  const current = getLocalCriteria(competitionId);
+  const updated = current.filter((c) => c.id !== itemId && c.key !== itemId);
+  saveLocalCriteria(competitionId, updated);
+}
+
+// ─── Award Categories ("Ways to Win") ─────────────────────────────────────────
+
+export function subscribeAwards(
+  competitionId: string,
+  callback: (awards: AwardCategory[]) => void
+): Unsubscribe {
+  callback(getLocalAwards(competitionId));
+
+  function handleLocalEvent() {
+    callback(getLocalAwards(competitionId));
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener(SYNC_EVENT, handleLocalEvent);
+    window.addEventListener("storage", handleLocalEvent);
+  }
+
+  return () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener(SYNC_EVENT, handleLocalEvent);
+      window.removeEventListener("storage", handleLocalEvent);
+    }
+  };
+}
+
+export async function addAwardCategory(
+  competitionId: string,
+  name: string,
+  criteriaKeys: string[]
+): Promise<AwardCategory> {
+  const newAward: AwardCategory = {
+    id: "award_" + Date.now(),
+    name,
+    competitionId,
+    criteriaKeys,
+    createdAt: Date.now(),
+  };
+
+  const current = getLocalAwards(competitionId);
+  const updated = [...current, newAward];
+  saveLocalAwards(competitionId, updated);
+
+  return newAward;
+}
+
+export async function renameAwardCategory(
+  competitionId: string,
+  awardId: string,
+  newName: string
+): Promise<void> {
+  const current = getLocalAwards(competitionId);
+  const updated = current.map((a) => (a.id === awardId ? { ...a, name: newName } : a));
+  saveLocalAwards(competitionId, updated);
+}
+
+export async function deleteAwardCategory(
+  competitionId: string,
+  awardId: string
+): Promise<void> {
+  const current = getLocalAwards(competitionId);
+  const updated = current.filter((a) => a.id !== awardId);
+  saveLocalAwards(competitionId, updated);
 }
 
 // ─── Participants ─────────────────────────────────────────────────────────────
@@ -141,41 +420,8 @@ export function subscribeParticipants(
   competitionId: string,
   callback: (participants: Participant[]) => void
 ): Unsubscribe {
-  // Emit initial local state immediately
   callback(getLocalParticipants(competitionId));
 
-  let firestoreUnsub: Unsubscribe | null = null;
-
-  try {
-    const q = query(
-      collection(db, "competitions", competitionId, "participants"),
-      orderBy("order", "asc")
-    );
-    firestoreUnsub = onSnapshot(
-      q,
-      (snap) => {
-        const remoteParts = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Participant));
-        if (remoteParts.length > 0) {
-          const local = getLocalParticipants(competitionId);
-          const map = new Map<string, Participant>();
-          local.forEach((p) => map.set(p.id, p));
-          remoteParts.forEach((p) => map.set(p.id, p));
-          const merged = Array.from(map.values()).sort((a, b) => a.order - b.order);
-          saveLocalParticipants(competitionId, merged);
-          callback(merged);
-        } else {
-          callback(getLocalParticipants(competitionId));
-        }
-      },
-      (_err) => {
-        callback(getLocalParticipants(competitionId));
-      }
-    );
-  } catch (e) {
-    callback(getLocalParticipants(competitionId));
-  }
-
-  // Cross-tab & same-tab event listeners for local instant sync
   function handleLocalEvent() {
     callback(getLocalParticipants(competitionId));
   }
@@ -186,7 +432,6 @@ export function subscribeParticipants(
   }
 
   return () => {
-    if (firestoreUnsub) firestoreUnsub();
     if (typeof window !== "undefined") {
       window.removeEventListener(SYNC_EVENT, handleLocalEvent);
       window.removeEventListener("storage", handleLocalEvent);
@@ -206,30 +451,13 @@ export async function addParticipant(
     addedAt: Date.now(),
   };
 
-  // 1. Instant local update
   const current = getLocalParticipants(competitionId);
   const map = new Map<string, Participant>();
   current.forEach((p) => map.set(p.id, p));
   map.set(newPart.id, newPart);
   const updated = Array.from(map.values()).sort((a, b) => a.order - b.order);
-  
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem(`sofea_parts_${competitionId}`, JSON.stringify(updated));
-      notifyLocalSync();
-    } catch (e) {}
-  }
 
-  // 2. Async Cloud sync
-  try {
-    await addDoc(
-      collection(db, "competitions", competitionId, "participants"),
-      { name, order, addedAt: Date.now() }
-    );
-  } catch (err) {
-    console.warn("Saved participant locally.");
-  }
-
+  saveLocalParticipants(competitionId, updated);
   return newPart.id;
 }
 
@@ -237,22 +465,14 @@ export async function removeParticipant(
   competitionId: string,
   participantId: string
 ): Promise<void> {
-  // 1. Instant local update
   const current = getLocalParticipants(competitionId);
   const updated = current.filter((p) => p.id !== participantId);
-  
+
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem(`sofea_parts_${competitionId}`, JSON.stringify(updated));
       notifyLocalSync();
     } catch (e) {}
-  }
-
-  // 2. Async Cloud sync
-  try {
-    await deleteDoc(doc(db, "competitions", competitionId, "participants", participantId));
-  } catch (err) {
-    console.warn("Removed participant locally.");
   }
 }
 
@@ -262,38 +482,8 @@ export function subscribeScores(
   competitionId: string,
   callback: (scores: ScoreEntry[]) => void
 ): Unsubscribe {
-  // Emit initial local state immediately
   callback(getLocalScores(competitionId));
 
-  let firestoreUnsub: Unsubscribe | null = null;
-
-  try {
-    const q = collection(db, "competitions", competitionId, "scores");
-    firestoreUnsub = onSnapshot(
-      q,
-      (snap) => {
-        const remoteScores = snap.docs.map((d) => ({ ...d.data() } as ScoreEntry));
-        if (remoteScores.length > 0) {
-          const local = getLocalScores(competitionId);
-          const map = new Map<string, ScoreEntry>();
-          local.forEach((s) => map.set(`${s.judgeId}_${s.participantId}`, s));
-          remoteScores.forEach((s) => map.set(`${s.judgeId}_${s.participantId}`, s));
-          const merged = Array.from(map.values());
-          saveLocalScores(competitionId, merged);
-          callback(merged);
-        } else {
-          callback(getLocalScores(competitionId));
-        }
-      },
-      (_err) => {
-        callback(getLocalScores(competitionId));
-      }
-    );
-  } catch (e) {
-    callback(getLocalScores(competitionId));
-  }
-
-  // Cross-tab & same-tab event listeners for local instant sync
   function handleLocalEvent() {
     callback(getLocalScores(competitionId));
   }
@@ -304,7 +494,6 @@ export function subscribeScores(
   }
 
   return () => {
-    if (firestoreUnsub) firestoreUnsub();
     if (typeof window !== "undefined") {
       window.removeEventListener(SYNC_EVENT, handleLocalEvent);
       window.removeEventListener("storage", handleLocalEvent);
@@ -316,7 +505,7 @@ export async function saveScore(
   competitionId: string,
   judgeId: string,
   participantId: string,
-  scores: { c1: number; c2: number; c3: number; c4: number },
+  scores: Record<string, number>,
   isDraft: boolean
 ): Promise<void> {
   const newEntry: ScoreEntry = {
@@ -328,7 +517,6 @@ export async function saveScore(
     submittedAt: isDraft ? null : Date.now(),
   };
 
-  // 1. Instant local map merge (preserves all other judges' scores)
   const current = getLocalScores(competitionId);
   const map = new Map<string, ScoreEntry>();
   current.forEach((s) => map.set(`${s.judgeId}_${s.participantId}`, s));
@@ -341,14 +529,6 @@ export async function saveScore(
       notifyLocalSync();
     } catch (e) {}
   }
-
-  // 2. Async Cloud sync
-  try {
-    const scoreId = `${judgeId}_${participantId}`;
-    await setDoc(doc(db, "competitions", competitionId, "scores", scoreId), newEntry);
-  } catch (err) {
-    console.warn("Saved score locally.");
-  }
 }
 
 export async function deleteScore(
@@ -356,7 +536,6 @@ export async function deleteScore(
   judgeId: string,
   participantId: string
 ): Promise<void> {
-  // 1. Instant local removal
   const current = getLocalScores(competitionId);
   const updated = current.filter(
     (s) => !(s.judgeId === judgeId && s.participantId === participantId)
@@ -368,28 +547,12 @@ export async function deleteScore(
       notifyLocalSync();
     } catch (e) {}
   }
-
-  // 2. Async Cloud sync
-  try {
-    const scoreId = `${judgeId}_${participantId}`;
-    await deleteDoc(doc(db, "competitions", competitionId, "scores", scoreId));
-  } catch (err) {
-    console.warn("Deleted score locally.");
-  }
 }
 
 // ─── PIN Management ───────────────────────────────────────────────────────────
 
 export async function getPins(): Promise<Record<string, string> | null> {
-  try {
-    const snap = await getDoc(doc(db, "config", "pins"));
-    if (snap.exists()) return snap.data() as Record<string, string>;
-  } catch (e) {}
   return null;
 }
 
-export async function updatePins(pins: Record<string, string>): Promise<void> {
-  try {
-    await setDoc(doc(db, "config", "pins"), pins);
-  } catch (e) {}
-}
+export async function updatePins(pins: Record<string, string>): Promise<void> {}

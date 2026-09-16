@@ -2,23 +2,80 @@
 import React, { useState, useEffect, use } from "react";
 import { useParticipants } from "@/hooks/useParticipants";
 import { useScores } from "@/hooks/useScores";
-import { getCompetition, updateCompetitionStatus, addParticipant, removeParticipant } from "@/lib/db";
+import {
+  getCompetition,
+  updateCompetitionStatus,
+  addParticipant,
+  removeParticipant,
+  subscribeJudges,
+  addJudge,
+  deleteJudge,
+  subscribeCriteria,
+  addCriteriaItem,
+  deleteCriteriaItem,
+  subscribeAwards,
+  addAwardCategory,
+  renameAwardCategory,
+  deleteAwardCategory,
+} from "@/lib/db";
 import { buildResults } from "@/lib/scoring";
-import { JUDGES, CRITERIA, type Competition } from "@/lib/types";
+import {
+  INITIAL_JUDGES,
+  type Competition,
+  type Judge,
+  type CriteriaItem,
+  type AwardCategory,
+} from "@/lib/types";
 import styles from "./page.module.css";
-import { Users, BarChart2, Trophy, Settings, Plus, Trash2, Lock, Unlock, Eye, EyeOff, Activity } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
+import {
+  Users,
+  BarChart2,
+  Trophy,
+  Settings,
+  Plus,
+  Trash2,
+  Lock,
+  Unlock,
+  Eye,
+  EyeOff,
+  Activity,
+  UserCheck,
+  FileText,
+  Printer,
+  Edit2,
+  Check,
+  RefreshCw,
+} from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 
-export default function AdminDashboard(props: { params: Promise<{ competitionId: string }> }) {
+export default function AdminDashboard(props: {
+  params: Promise<{ competitionId: string }>;
+}) {
   const params = use(props.params);
   const competitionId = params.competitionId;
 
   const [competition, setCompetition] = useState<Competition | null>(null);
   const [loadingComp, setLoadingComp] = useState(true);
-  
+
+  // Dynamic state hooks
   const { participants, loading: loadingP } = useParticipants(competitionId);
   const { scores, loading: loadingS } = useScores(competitionId);
-  
+
+  const [judges, setJudges] = useState<Judge[]>([]);
+  const [criteria, setCriteria] = useState<CriteriaItem[]>([]);
+  const [awards, setAwards] = useState<AwardCategory[]>([]);
+
   const [activeTab, setActiveTab] = useState("participants");
 
   useEffect(() => {
@@ -28,35 +85,45 @@ export default function AdminDashboard(props: { params: Promise<{ competitionId:
         if (!comp) {
           comp = {
             id: competitionId,
-            name: 'Best in Pop Sing & Dance',
-            academicYear: '2025-2026',
-            description: 'General Assembly Competition',
+            name: "Best in Pop Sing & Dance",
+            academicYear: "2026-2027",
+            description: "SOFEA Competition",
             guidelines: [],
-            status: 'active',
-            createdAt: Date.now()
+            status: "active",
+            createdAt: Date.now(),
           };
         }
         setCompetition(comp);
       } catch (err) {
         setCompetition({
           id: competitionId,
-          name: 'Best in Pop Sing & Dance',
-          academicYear: '2025-2026',
-          description: 'General Assembly Competition',
+          name: "Best in Pop Sing & Dance",
+          academicYear: "2026-2027",
+          description: "SOFEA Competition",
           guidelines: [],
-          status: 'active',
-          createdAt: Date.now()
+          status: "active",
+          createdAt: Date.now(),
         });
       } finally {
         setLoadingComp(false);
       }
     }
     load();
+
+    const unsubJudges = subscribeJudges(competitionId, (j) => setJudges(j));
+    const unsubCrit = subscribeCriteria(competitionId, (c) => setCriteria(c));
+    const unsubAwards = subscribeAwards(competitionId, (a) => setAwards(a));
+
+    return () => {
+      unsubJudges();
+      unsubCrit();
+      unsubAwards();
+    };
   }, [competitionId]);
 
   if (loadingComp || loadingP || loadingS) {
     return (
-      <div className="container" style={{ padding: '3rem 1.5rem', display: 'flex', justifyContent: 'center' }}>
+      <div className="container" style={{ padding: "3rem 1.5rem", display: "flex", justifyContent: "center" }}>
         <div className="spinner" />
       </div>
     );
@@ -64,51 +131,82 @@ export default function AdminDashboard(props: { params: Promise<{ competitionId:
 
   if (!competition) return <div className="container">Competition not found.</div>;
 
-  const results = buildResults(participants, scores);
+  const results = buildResults(participants, scores, criteria, awards);
 
   return (
-    <div className="container fade-in" style={{ padding: '2rem 1.5rem' }}>
+    <div className="container fade-in" style={{ padding: "2rem 1.5rem" }}>
       <div className={styles.header}>
         <div>
           <h2 className={styles.title}>{competition.name}</h2>
           <p className={styles.subtitle}>
-            AY {competition.academicYear} • Status: <span className={`badge ${competition.status === 'active' ? 'badge-success' : competition.status === 'locked' ? 'badge-warning' : 'badge-neutral'}`}>{competition.status.toUpperCase()}</span>
+            AY {competition.academicYear} • Status:{" "}
+            <span
+              className={`badge ${
+                competition.status === "active"
+                  ? "badge-success"
+                  : competition.status === "locked"
+                  ? "badge-warning"
+                  : "badge-neutral"
+              }`}
+            >
+              {competition.status.toUpperCase()}
+            </span>
           </p>
         </div>
       </div>
 
+      {/* 7-Tab Navigation Bar */}
       <div className={styles.tabs}>
         {[
-          { id: 'participants', label: 'Participants', icon: Users },
-          { id: 'status', label: 'Judge Status', icon: Eye },
-          { id: 'live', label: 'Live Scores', icon: Activity },
-          { id: 'summary', label: 'Summary & Viz', icon: BarChart2 },
-          { id: 'settings', label: 'Settings', icon: Settings }
-        ].map(t => (
-          <button 
-            key={t.id} 
-            onClick={() => setActiveTab(t.id)} 
-            className={`${styles.tab} ${activeTab === t.id ? styles.tabActive : ''}`}
+          { id: "participants", label: "Participants", icon: Users },
+          { id: "judges", label: "Judges", icon: UserCheck },
+          { id: "criteria", label: "Criteria", icon: FileText },
+          { id: "status", label: "Judge Status", icon: Eye },
+          { id: "live", label: "Live Scores", icon: Activity },
+          { id: "summary", label: "Summary & Viz", icon: BarChart2 },
+          { id: "settings", label: "Settings", icon: Settings },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={`${styles.tab} ${activeTab === t.id ? styles.tabActive : ""}`}
           >
             <t.icon size={16} /> {t.label}
           </button>
         ))}
       </div>
 
+      {/* Tab Content */}
       <div className={styles.tabContent}>
-        {activeTab === 'participants' && <TabParticipants compId={competitionId} participants={participants} />}
-        {activeTab === 'status' && <TabStatus participants={participants} scores={scores} />}
-        {activeTab === 'live' && <TabLive results={results} />}
-        {activeTab === 'summary' && <TabSummary results={results} />}
-        {activeTab === 'settings' && <TabSettings competition={competition} onUpdate={(c) => setCompetition(c)} />}
+        {activeTab === "participants" && (
+          <TabParticipants compId={competitionId} participants={participants} />
+        )}
+        {activeTab === "judges" && (
+          <TabJudges compId={competitionId} judges={judges} />
+        )}
+        {activeTab === "criteria" && (
+          <TabCriteria compId={competitionId} criteria={criteria} />
+        )}
+        {activeTab === "status" && (
+          <TabStatus participants={participants} scores={scores} judges={judges} criteria={criteria} />
+        )}
+        {activeTab === "live" && (
+          <TabLive results={results} judges={judges} criteria={criteria} />
+        )}
+        {activeTab === "summary" && (
+          <TabSummary compId={competitionId} competition={competition} results={results} judges={judges} criteria={criteria} awards={awards} />
+        )}
+        {activeTab === "settings" && (
+          <TabSettings competition={competition} judges={judges} onUpdate={(c) => setCompetition(c)} />
+        )}
       </div>
     </div>
   );
 }
 
-// ---- Tab Components ---- //
+// ─── 1. Participants Tab ───────────────────────────────────────────────────────
 
-function TabParticipants({ compId, participants }: { compId: string, participants: any[] }) {
+function TabParticipants({ compId, participants }: { compId: string; participants: any[] }) {
   const [name, setName] = useState("");
   const [order, setOrder] = useState("");
 
@@ -122,28 +220,64 @@ function TabParticipants({ compId, participants }: { compId: string, participant
 
   return (
     <div>
-      <h3 style={{ marginBottom: '1rem' }}>Participants ({participants.length})</h3>
+      <h3 style={{ marginBottom: "1rem" }}>Participants ({participants.length})</h3>
       <form onSubmit={handleAdd} className={styles.addForm}>
-        <input type="number" placeholder="Order #" value={order} onChange={e => setOrder(e.target.value)} className="input" style={{ width: '100px' }} required />
-        <input type="text" placeholder="Participant Name" value={name} onChange={e => setName(e.target.value)} className="input" style={{ flex: 1 }} required />
-        <button type="submit" className="btn btn-primary"><Plus size={16} /> Add</button>
+        <input
+          type="number"
+          placeholder="Order #"
+          value={order}
+          onChange={(e) => setOrder(e.target.value)}
+          className="input"
+          style={{ width: "100px" }}
+          required
+        />
+        <input
+          type="text"
+          placeholder="Participant / Sub-Org Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="input"
+          style={{ flex: 1, minWidth: "220px" }}
+          required
+        />
+        <button type="submit" className="btn btn-primary">
+          <Plus size={16} /> Add Participant
+        </button>
       </form>
+
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Order</th><th>Name</th><th>Actions</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Name</th>
+              <th style={{ textAlign: "right" }}>Actions</th>
+            </tr>
+          </thead>
           <tbody>
-            {participants.map(p => (
+            {participants.map((p) => (
               <tr key={p.id}>
-                <td>{p.order}</td>
+                <td style={{ fontWeight: "bold" }}>#{p.order}</td>
                 <td>{p.name}</td>
-                <td>
-                  <button onClick={() => removeParticipant(compId, p.id)} className="btn btn-ghost" style={{ padding: '0.4rem', color: 'var(--color-danger)' }}>
+                <td style={{ textAlign: "right" }}>
+                  <button
+                    onClick={() => removeParticipant(compId, p.id)}
+                    className="btn btn-ghost"
+                    style={{ padding: "0.4rem", color: "var(--color-danger)" }}
+                    title="Delete Participant"
+                  >
                     <Trash2 size={18} />
                   </button>
                 </td>
               </tr>
             ))}
-            {participants.length === 0 && <tr><td colSpan={3} style={{ textAlign: 'center' }}>No participants added yet.</td></tr>}
+            {participants.length === 0 && (
+              <tr>
+                <td colSpan={3} style={{ textAlign: "center", padding: "2rem" }}>
+                  No participants added yet.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -151,53 +285,302 @@ function TabParticipants({ compId, participants }: { compId: string, participant
   );
 }
 
-function TabStatus({ participants, scores }: { participants: any[], scores: any[] }) {
-  const [viewMode, setViewMode] = useState<'participant' | 'matrix'>('participant');
+// ─── 2. Judges Tab (Dynamic Creation + Random PIN Generator + Delete) ─────────
+
+function TabJudges({ compId, judges }: { compId: string; judges: Judge[] }) {
+  const [judgeName, setJudgeName] = useState("");
+  const [visiblePins, setVisiblePins] = useState<Record<string, boolean>>({});
+
+  async function handleAddJudge(e: React.FormEvent) {
+    e.preventDefault();
+    if (!judgeName.trim()) return;
+
+    await addJudge(compId, judgeName.trim());
+    setJudgeName("");
+  }
+
+  function togglePin(id: string) {
+    setVisiblePins((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  async function handleDeleteJudge(id: string, name: string) {
+    if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+    await deleteJudge(compId, id);
+  }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+      <h3 style={{ marginBottom: "0.25rem" }}>Judges Management ({judges.length})</h3>
+      <p style={{ fontSize: "0.88rem", color: "var(--color-text-muted)", marginBottom: "1.25rem" }}>
+        Add judges to generate unique random 4-digit PINs. Manage active judges for this event.
+      </p>
+
+      <form onSubmit={handleAddJudge} className={styles.addForm}>
+        <input
+          type="text"
+          placeholder="Judge Full Name (e.g. Dr. Maria Santos)"
+          value={judgeName}
+          onChange={(e) => setJudgeName(e.target.value)}
+          className="input"
+          style={{ flex: 1, minWidth: "250px" }}
+          required
+        />
+        <button type="submit" className="btn btn-primary">
+          <Plus size={16} /> Add Judge (Auto PIN)
+        </button>
+      </form>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Judge Name</th>
+              <th>Generated PIN</th>
+              <th style={{ textAlign: "right" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {judges.map((j) => (
+              <tr key={j.id}>
+                <td style={{ fontWeight: 600 }}>{j.name}</td>
+                <td style={{ fontFamily: "monospace", fontSize: "1.1rem" }}>
+                  <span
+                    style={{
+                      background: "var(--blue-50)",
+                      color: "var(--blue-900)",
+                      padding: "0.2rem 0.6rem",
+                      borderRadius: "6px",
+                      border: "1px solid var(--blue-200)",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {visiblePins[j.id] ? j.pin : "••••"}
+                  </span>
+                  <button
+                    onClick={() => togglePin(j.id)}
+                    className="btn btn-ghost"
+                    style={{ padding: "0.2rem 0.4rem", marginLeft: "0.5rem" }}
+                  >
+                    {visiblePins[j.id] ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </td>
+                <td style={{ textAlign: "right" }}>
+                  <button
+                    onClick={() => handleDeleteJudge(j.id, j.name)}
+                    className="btn btn-ghost"
+                    style={{ padding: "0.4rem", color: "var(--color-danger)" }}
+                    title="Delete Judge"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {judges.length === 0 && (
+              <tr>
+                <td colSpan={3} style={{ textAlign: "center", padding: "2rem" }}>
+                  No judges added yet. Add a judge above to generate a PIN.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── 3. Criteria Tab (Dynamic Builder + Rubric System + Delete) ───────────────
+
+function TabCriteria({ compId, criteria }: { compId: string; criteria: CriteriaItem[] }) {
+  const [label, setLabel] = useState("");
+  const [weight, setWeight] = useState("");
+  const [rubric5, setRubric5] = useState("");
+  const [rubric1, setRubric1] = useState("");
+
+  const totalWeight = criteria.reduce((sum, c) => sum + (c.weight || 0), 0);
+
+  async function handleAddCriteria(e: React.FormEvent) {
+    e.preventDefault();
+    if (!label.trim() || !weight) return;
+
+    const colors = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4"];
+    const color = colors[criteria.length % colors.length];
+
+    await addCriteriaItem(compId, {
+      label: label.trim(),
+      weight: parseFloat(weight),
+      color,
+      rubric: {
+        5: rubric5.trim() || "Outstanding / Flawless execution.",
+        4: "Strong performance with minor flaws.",
+        3: "Average performance.",
+        2: "Below average execution.",
+        1: rubric1.trim() || "Poor / Incomplete execution.",
+      },
+    });
+
+    setLabel("");
+    setWeight("");
+    setRubric5("");
+    setRubric1("");
+  }
+
+  async function handleDeleteCriteria(id: string, name: string) {
+    if (!confirm(`Are you sure you want to delete criteria "${name}"?`)) return;
+    await deleteCriteriaItem(compId, id);
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
         <div>
-          <h3 style={{ margin: 0 }}>Judge Submission & Criteria Progress</h3>
-          <p style={{ fontSize: '0.88rem', color: 'var(--gray-500)', margin: '0.2rem 0 0 0' }}>
-            Real-time status tracking for each participant and recorded criteria (C1–C4) per judge.
+          <h3 style={{ margin: 0 }}>Criteria Sets & Point Rubrics</h3>
+          <p style={{ fontSize: "0.88rem", color: "var(--color-text-muted)", margin: "0.2rem 0 0 0" }}>
+            Configure criteria names, percentage weights, and scoring rubrics for this event.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.4rem', background: 'var(--gray-100)', padding: '0.25rem', borderRadius: '999px' }}>
+        <span className={`badge ${totalWeight === 100 ? "badge-success" : "badge-warning"}`} style={{ fontSize: "0.9rem" }}>
+          Total Weight: {totalWeight}% {totalWeight === 100 ? "✓ (Balanced)" : "(Should sum to 100%)"}
+        </span>
+      </div>
+
+      {/* Add Criteria Form */}
+      <form onSubmit={handleAddCriteria} className="card" style={{ padding: "1.25rem", marginBottom: "1.5rem", background: "var(--gray-50)" }}>
+        <h4 style={{ margin: "0 0 1rem 0", color: "var(--blue-900)" }}>Add New Criteria Item</h4>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: "1rem", marginBottom: "1rem" }}>
+          <input
+            type="text"
+            placeholder="Criteria Title (e.g. Vocal Execution)"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            className="input"
+            required
+          />
+          <input
+            type="number"
+            placeholder="Weight (%)"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            className="input"
+            min="1"
+            max="100"
+            required
+          />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+          <input
+            type="text"
+            placeholder="Description for Score 5 (Outstanding)"
+            value={rubric5}
+            onChange={(e) => setRubric5(e.target.value)}
+            className="input"
+          />
+          <input
+            type="text"
+            placeholder="Description for Score 1 (Needs Improvement)"
+            value={rubric1}
+            onChange={(e) => setRubric1(e.target.value)}
+            className="input"
+          />
+        </div>
+        <button type="submit" className="btn btn-primary" style={{ alignSelf: "flex-start" }}>
+          <Plus size={16} /> Add Criteria Item
+        </button>
+      </form>
+
+      {/* Criteria List */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        {criteria.map((c) => (
+          <div key={c.id || c.key} className="card" style={{ padding: "1.25rem", borderLeft: `5px solid ${c.color}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <h4 style={{ margin: 0, fontSize: "1.1rem", color: "var(--blue-900)" }}>{c.label}</h4>
+                <span className="badge badge-primary">{c.weight}% Weight</span>
+              </div>
+              <button
+                onClick={() => handleDeleteCriteria(c.id || c.key, c.label)}
+                className="btn btn-ghost"
+                style={{ padding: "0.3rem", color: "var(--color-danger)" }}
+                title="Delete Criteria"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+            <div style={{ fontSize: "0.85rem", color: "var(--gray-600)" }}>
+              <strong>Point System Rubric:</strong>
+              <ul style={{ paddingLeft: "1.2rem", marginTop: "0.25rem", margin: 0 }}>
+                <li>Score 5: {c.rubric[5]}</li>
+                <li>Score 1: {c.rubric[1]}</li>
+              </ul>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── 4. Judge Status Tab (Per Participant + Matrix Overview) ──────────────────
+
+function TabStatus({
+  participants,
+  scores,
+  judges,
+  criteria,
+}: {
+  participants: any[];
+  scores: any[];
+  judges: Judge[];
+  criteria: CriteriaItem[];
+}) {
+  const [viewMode, setViewMode] = useState<"participant" | "matrix">("participant");
+  const activeJudges = judges.length > 0 ? judges : INITIAL_JUDGES;
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
+        <div>
+          <h3 style={{ margin: 0 }}>Judge Submission & Criteria Progress</h3>
+          <p style={{ fontSize: "0.88rem", color: "var(--gray-500)", margin: "0.2rem 0 0 0" }}>
+            Real-time status tracking for each participant and recorded criteria per judge.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "0.4rem", background: "var(--gray-100)", padding: "0.25rem", borderRadius: "999px" }}>
           <button
-            onClick={() => setViewMode('participant')}
-            className={`btn btn-sm ${viewMode === 'participant' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: '999px', fontSize: '0.82rem' }}
+            onClick={() => setViewMode("participant")}
+            className={`btn btn-sm ${viewMode === "participant" ? "btn-primary" : "btn-ghost"}`}
+            style={{ borderRadius: "999px", fontSize: "0.82rem" }}
           >
             By Participant (Detailed Criteria)
           </button>
           <button
-            onClick={() => setViewMode('matrix')}
-            className={`btn btn-sm ${viewMode === 'matrix' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: '999px', fontSize: '0.82rem' }}
+            onClick={() => setViewMode("matrix")}
+            className={`btn btn-sm ${viewMode === "matrix" ? "btn-primary" : "btn-ghost"}`}
+            style={{ borderRadius: "999px", fontSize: "0.82rem" }}
           >
             Overview Matrix
           </button>
         </div>
       </div>
 
-      {viewMode === 'participant' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {viewMode === "participant" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           {participants.map((p) => {
-            const participantScores = scores.filter(s => s.participantId === p.id);
-            const submittedCount = participantScores.filter(s => !s.isDraft).length;
+            const participantScores = scores.filter((s) => s.participantId === p.id);
+            const submittedCount = participantScores.filter((s) => !s.isDraft).length;
 
             return (
-              <div key={p.id} className="card" style={{ padding: '1.25rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <span className="badge badge-primary" style={{ fontSize: '0.9rem', fontWeight: 700 }}>
+              <div key={p.id} className="card" style={{ padding: "1.25rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <span className="badge badge-primary" style={{ fontSize: "0.9rem", fontWeight: 700 }}>
                       #{p.order}
                     </span>
-                    <h4 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--blue-900)' }}>{p.name}</h4>
+                    <h4 style={{ margin: 0, fontSize: "1.1rem", color: "var(--blue-900)" }}>{p.name}</h4>
                   </div>
-                  <span className={`badge ${submittedCount === JUDGES.length ? 'badge-success' : submittedCount > 0 ? 'badge-warning' : 'badge-neutral'}`}>
-                    {submittedCount} of {JUDGES.length} Judges Submitted
+                  <span className={`badge ${submittedCount === activeJudges.length ? "badge-success" : submittedCount > 0 ? "badge-warning" : "badge-neutral"}`}>
+                    {submittedCount} of {activeJudges.length} Judges Submitted
                   </span>
                 </div>
 
@@ -206,50 +589,48 @@ function TabStatus({ participants, scores }: { participants: any[], scores: any[
                     <thead>
                       <tr>
                         <th>Judge</th>
-                        <th style={{ textAlign: 'center' }}>C1: Songwriting (30%)</th>
-                        <th style={{ textAlign: 'center' }}>C2: Vocal (25%)</th>
-                        <th style={{ textAlign: 'center' }}>C3: Choreo (25%)</th>
-                        <th style={{ textAlign: 'center' }}>C4: Showmanship (20%)</th>
-                        <th style={{ textAlign: 'center' }}>Progress</th>
-                        <th style={{ textAlign: 'center' }}>Status</th>
+                        {criteria.map((c) => (
+                          <th key={c.id || c.key} style={{ textAlign: "center" }}>
+                            {c.label} ({c.weight}%)
+                          </th>
+                        ))}
+                        <th style={{ textAlign: "center" }}>Progress</th>
+                        <th style={{ textAlign: "center" }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {JUDGES.map((j) => {
-                        const scoreEntry = participantScores.find(s => s.judgeId === j.id);
-                        
-                        const hasC1 = scoreEntry && scoreEntry.c1 > 0;
-                        const hasC2 = scoreEntry && scoreEntry.c2 > 0;
-                        const hasC3 = scoreEntry && scoreEntry.c3 > 0;
-                        const hasC4 = scoreEntry && scoreEntry.c4 > 0;
-
-                        const scoredCount = [hasC1, hasC2, hasC3, hasC4].filter(Boolean).length;
+                      {activeJudges.map((j) => {
+                        const scoreEntry = participantScores.find((s) => s.judgeId === j.id);
                         const isSubmitted = scoreEntry && !scoreEntry.isDraft;
                         const isDraft = scoreEntry && scoreEntry.isDraft;
+
+                        const scoredCount = criteria.filter((c) => scoreEntry && (scoreEntry[c.key] || 0) > 0).length;
 
                         return (
                           <tr key={j.id}>
                             <td style={{ fontWeight: 600 }}>{j.name}</td>
-                            <td style={{ textAlign: 'center' }}>
-                              {hasC1 ? <span className="badge badge-primary">{scoreEntry.c1} / 5</span> : <span style={{ color: 'var(--gray-400)' }}>—</span>}
+                            {criteria.map((c) => {
+                              const val = scoreEntry ? scoreEntry[c.key] : undefined;
+                              return (
+                                <td key={c.id || c.key} style={{ textAlign: "center" }}>
+                                  {val && val > 0 ? (
+                                    <span className="badge badge-primary">{val} / 5</span>
+                                  ) : (
+                                    <span style={{ color: "var(--gray-400)" }}>—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                            <td style={{ textAlign: "center" }}>
+                              <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                                {scoredCount} / {criteria.length}
+                              </span>
                             </td>
-                            <td style={{ textAlign: 'center' }}>
-                              {hasC2 ? <span className="badge badge-primary">{scoreEntry.c2} / 5</span> : <span style={{ color: 'var(--gray-400)' }}>—</span>}
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              {hasC3 ? <span className="badge badge-primary">{scoreEntry.c3} / 5</span> : <span style={{ color: 'var(--gray-400)' }}>—</span>}
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              {hasC4 ? <span className="badge badge-primary">{scoreEntry.c4} / 5</span> : <span style={{ color: 'var(--gray-400)' }}>—</span>}
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{scoredCount} / 4</span>
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
+                            <td style={{ textAlign: "center" }}>
                               {isSubmitted ? (
                                 <span className="badge badge-success">✓ Submitted</span>
                               ) : isDraft ? (
-                                <span className="badge badge-warning">~ Draft ({scoredCount}/4)</span>
+                                <span className="badge badge-warning">~ Draft ({scoredCount}/{criteria.length})</span>
                               ) : (
                                 <span className="badge badge-neutral">— Pending</span>
                               )}
@@ -264,7 +645,7 @@ function TabStatus({ participants, scores }: { participants: any[], scores: any[
             );
           })}
           {participants.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
+            <div style={{ textAlign: "center", padding: "2rem", color: "var(--gray-500)" }}>
               No participants added yet. Add participants from the "Participants" tab to start tracking progress.
             </div>
           )}
@@ -276,15 +657,17 @@ function TabStatus({ participants, scores }: { participants: any[], scores: any[
               <tr>
                 <th>Judge</th>
                 <th>Progress</th>
-                {participants.map(p => (
-                  <th key={p.id} title={p.name}>#{p.order}</th>
+                {participants.map((p) => (
+                  <th key={p.id} title={p.name}>
+                    #{p.order}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {JUDGES.map(judge => {
-                const judgeScores = scores.filter(s => s.judgeId === judge.id);
-                const submittedCount = judgeScores.filter(s => !s.isDraft).length;
+              {activeJudges.map((judge) => {
+                const judgeScores = scores.filter((s) => s.judgeId === judge.id);
+                const submittedCount = judgeScores.filter((s) => !s.isDraft).length;
                 const total = participants.length;
                 const perc = total > 0 ? Math.round((submittedCount / total) * 100) : 0;
 
@@ -292,19 +675,21 @@ function TabStatus({ participants, scores }: { participants: any[], scores: any[
                   <tr key={judge.id}>
                     <td style={{ fontWeight: 600 }}>{judge.name}</td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <div style={{ flex: 1, height: '8px', background: 'var(--gray-200)', borderRadius: '4px', overflow: 'hidden' }}>
-                          <div style={{ width: `${perc}%`, height: '100%', background: perc === 100 ? 'var(--color-success)' : 'var(--color-primary)' }} />
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <div style={{ flex: 1, height: "8px", background: "var(--gray-200)", borderRadius: "4px", overflow: "hidden" }}>
+                          <div style={{ width: `${perc}%`, height: "100%", background: perc === 100 ? "var(--color-success)" : "var(--color-primary)" }} />
                         </div>
-                        <span style={{ fontSize: '0.8rem', width: '40px' }}>{submittedCount}/{total}</span>
+                        <span style={{ fontSize: "0.8rem", width: "40px" }}>
+                          {submittedCount}/{total}
+                        </span>
                       </div>
                     </td>
-                    {participants.map(p => {
-                      const score = judgeScores.find(s => s.participantId === p.id);
+                    {participants.map((p) => {
+                      const score = judgeScores.find((s) => s.participantId === p.id);
                       let badge = <span className="badge badge-neutral">—</span>;
                       if (score) {
-                        if (score.isDraft) badge = <span className="badge badge-warning" title="Draft">~ Draft</span>;
-                        else badge = <span className="badge badge-success" title="Submitted">✓ Done</span>;
+                        if (score.isDraft) badge = <span className="badge badge-warning">~ Draft</span>;
+                        else badge = <span className="badge badge-success">✓ Done</span>;
                       }
                       return <td key={p.id}>{badge}</td>;
                     })}
@@ -319,62 +704,88 @@ function TabStatus({ participants, scores }: { participants: any[], scores: any[
   );
 }
 
-function TabLive({ results }: { results: any[] }) {
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+// ─── 5. Live Scores Tab ────────────────────────────────────────────────────────
 
+function TabLive({
+  results,
+  judges,
+  criteria,
+}: {
+  results: any[];
+  judges: Judge[];
+  criteria: CriteriaItem[];
+}) {
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const sorted = [...results].sort((a, b) => b.averageWeighted - a.averageWeighted);
+  const activeJudges = judges.length > 0 ? judges : INITIAL_JUDGES;
 
   return (
     <div>
-      <h3 style={{ marginBottom: '1rem' }}>Live Scores</h3>
+      <h3 style={{ marginBottom: "1rem" }}>Live Scores & Overall Weighted Scores</h3>
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
               <th>Participant</th>
-              {JUDGES.map((j, i) => <th key={j.id}>J{i+1}</th>)}
-              <th>Avg</th>
-              <th></th>
+              {activeJudges.map((j, i) => (
+                <th key={j.id} title={j.name}>
+                  J{i + 1}
+                </th>
+              ))}
+              <th style={{ color: "var(--blue-900)", fontWeight: "bold" }}>Overall Weighted Avg (/100%)</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map(res => (
+            {sorted.map((res) => (
               <React.Fragment key={res.participant.id}>
                 <tr>
-                  <td style={{ fontWeight: 600 }}>#{res.participant.order} {res.participant.name}</td>
-                  {JUDGES.map(j => {
+                  <td style={{ fontWeight: 600 }}>
+                    #{res.participant.order} {res.participant.name}
+                  </td>
+                  {activeJudges.map((j) => {
                     const ws = res.judgeScores[j.id];
-                    return <td key={j.id}>{ws ? ws.weighted.toFixed(2) : '—'}</td>;
+                    return <td key={j.id}>{ws ? `${ws.weighted.toFixed(2)}%` : "—"}</td>;
                   })}
-                  <td style={{ fontWeight: 'bold', color: 'var(--blue-700)' }}>{res.averageWeighted.toFixed(2)}</td>
+                  <td style={{ fontWeight: "bold", fontSize: "1.05rem", color: "var(--blue-700)" }}>
+                    {res.averageWeighted.toFixed(2)}%
+                  </td>
                   <td>
-                    <button className={styles.expandBtn} onClick={() => setExpandedRow(expandedRow === res.participant.id ? null : res.participant.id)}>
-                      {expandedRow === res.participant.id ? 'Hide Details' : 'View Details'}
+                    <button
+                      className={styles.expandBtn}
+                      onClick={() => setExpandedRow(expandedRow === res.participant.id ? null : res.participant.id)}
+                    >
+                      {expandedRow === res.participant.id ? "Hide Breakdown" : "View Breakdown"}
                     </button>
                   </td>
                 </tr>
                 {expandedRow === res.participant.id && (
                   <tr>
-                    <td colSpan={JUDGES.length + 3} style={{ padding: 0 }}>
+                    <td colSpan={activeJudges.length + 3} style={{ padding: 0 }}>
                       <div className={styles.subTableWrap}>
-                        <table style={{ background: 'white', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)' }}>
+                        <table style={{ background: "white", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
                           <thead>
                             <tr>
-                              <th>Judge</th>
-                              {CRITERIA.map(c => <th key={c.key}>{c.label} ({c.weight}%)</th>)}
+                              <th>Judge Name</th>
+                              {criteria.map((c) => (
+                                <th key={c.id || c.key}>
+                                  {c.label} ({c.weight}%)
+                                </th>
+                              ))}
+                              <th>Weighted Total</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {JUDGES.map(j => {
+                            {activeJudges.map((j) => {
                               const ws = res.judgeScores[j.id];
                               if (!ws) return null;
                               return (
                                 <tr key={j.id}>
                                   <td>{j.name}</td>
-                                  <td>{ws.raw.c1}</td>
-                                  <td>{ws.raw.c2}</td>
-                                  <td>{ws.raw.c3}</td>
-                                  <td>{ws.raw.c4}</td>
+                                  {criteria.map((c) => (
+                                    <td key={c.id || c.key}>{ws.raw[c.key] || 0} / 5</td>
+                                  ))}
+                                  <td style={{ fontWeight: "bold" }}>{ws.weighted.toFixed(2)}%</td>
                                 </tr>
                               );
                             })}
@@ -386,7 +797,13 @@ function TabLive({ results }: { results: any[] }) {
                 )}
               </React.Fragment>
             ))}
-            {sorted.length === 0 && <tr><td colSpan={JUDGES.length + 3} style={{ textAlign: 'center' }}>No data.</td></tr>}
+            {sorted.length === 0 && (
+              <tr>
+                <td colSpan={activeJudges.length + 3} style={{ textAlign: "center", padding: "2rem" }}>
+                  No score data available yet.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -394,248 +811,551 @@ function TabLive({ results }: { results: any[] }) {
   );
 }
 
-function TabSummary({ results }: { results: any[] }) {
-  const barData = results.map(r => {
+// ─── 6. Summary & Viz Tab (Award Manager + Print / PDF Certificate Feature) ──
+
+function TabSummary({
+  compId,
+  competition,
+  results,
+  judges,
+  criteria,
+  awards,
+}: {
+  compId: string;
+  competition: Competition;
+  results: any[];
+  judges: Judge[];
+  criteria: CriteriaItem[];
+  awards: AwardCategory[];
+}) {
+  const [awardName, setAwardName] = useState("");
+  const [selectedCriteria, setSelectedCriteria] = useState<string[]>([]);
+  const [editingAwardId, setEditingAwardId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+
+  const [printAwardId, setPrintAwardId] = useState<string>("overall");
+
+  const activeJudges = judges.length > 0 ? judges : INITIAL_JUDGES;
+
+  const barData = results.map((r) => {
     const d: any = { name: `#${r.participant.order}` };
-    JUDGES.forEach((j, i) => {
-      d[`J${i+1}`] = r.judgeScores[j.id]?.weighted || 0;
+    activeJudges.forEach((j, i) => {
+      d[`J${i + 1}`] = r.judgeScores[j.id]?.weighted || 0;
     });
     return d;
   });
 
-  const judgeColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
+  const judgeColors = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4"];
 
   const getMedal = (rank: number) => {
-    if (rank === 1) return '🥇 ';
-    if (rank === 2) return '🥈 ';
-    if (rank === 3) return '🥉 ';
+    if (rank === 1) return "🥇 ";
+    if (rank === 2) return "🥈 ";
+    if (rank === 3) return "🥉 ";
     return `${rank}. `;
   };
 
-  const bestVocal = [...results].sort((a, b) => b.averageVocal - a.averageVocal);
-  const bestChoreo = [...results].sort((a, b) => b.averageChoreo - a.averageChoreo);
+  async function handleAddAward(e: React.FormEvent) {
+    e.preventDefault();
+    if (!awardName.trim() || selectedCriteria.length === 0) return;
+
+    await addAwardCategory(compId, awardName.trim(), selectedCriteria);
+    setAwardName("");
+    setSelectedCriteria([]);
+  }
+
+  async function handleSaveRename(awardId: string) {
+    if (!editName.trim()) return;
+    await renameAwardCategory(compId, awardId, editName.trim());
+    setEditingAwardId(null);
+    setEditName("");
+  }
+
+  async function handleDeleteAward(awardId: string, name: string) {
+    if (!confirm(`Are you sure you want to delete award category "${name}"?`)) return;
+    await deleteAwardCategory(compId, awardId);
+  }
+
+  function handlePrint() {
+    window.print();
+  }
+
+  // Determine which results to show in print layout
+  let printTitle = "OFFICIAL OVERALL TOP RANKINGS";
+  let printRows: { rank: number; name: string; scoreStr: string }[] = [];
+
+  if (printAwardId === "overall") {
+    printTitle = "OFFICIAL OVERALL TOP RANKINGS";
+    printRows = results
+      .slice()
+      .sort((a, b) => a.rank - b.rank)
+      .map((r) => ({
+        rank: r.rank,
+        name: r.participant.name,
+        scoreStr: `${r.averageWeighted.toFixed(2)}%`,
+      }));
+  } else if (printAwardId === "vocal") {
+    printTitle = "OFFICIAL RESULTS — Best in Vocal Execution";
+    printRows = results
+      .slice()
+      .sort((a, b) => a.vocalRank - b.vocalRank)
+      .map((r) => ({
+        rank: r.vocalRank,
+        name: r.participant.name,
+        scoreStr: `${r.averageVocal.toFixed(2)}%`,
+      }));
+  } else if (printAwardId === "choreo") {
+    printTitle = "OFFICIAL RESULTS — Best in Pop Choreography";
+    printRows = results
+      .slice()
+      .sort((a, b) => a.choreoRank - b.choreoRank)
+      .map((r) => ({
+        rank: r.choreoRank,
+        name: r.participant.name,
+        scoreStr: `${r.averageChoreo.toFixed(2)}%`,
+      }));
+  } else {
+    const foundAward = awards.find((a) => a.id === printAwardId);
+    if (foundAward) {
+      printTitle = `OFFICIAL RESULTS — ${foundAward.name}`;
+      printRows = results
+        .slice()
+        .sort((a, b) => (a.awardRanks?.[foundAward.id] || 99) - (b.awardRanks?.[foundAward.id] || 99))
+        .map((r) => ({
+          rank: r.awardRanks?.[foundAward.id] || 1,
+          name: r.participant.name,
+          scoreStr: `${(r.awardAverages?.[foundAward.id] || 0).toFixed(2)}%`,
+        }));
+    }
+  }
 
   return (
     <div>
-      <div className={styles.chartsGrid}>
-        <div className={styles.chartCard}>
-          <div className={styles.chartTitle}>Weighted Scores per Judge</div>
-          <div style={{ height: 300 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData}>
-                <XAxis dataKey="name" fontSize={12} />
-                <YAxis domain={[0, 100]} fontSize={12} />
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                {JUDGES.map((j, i) => (
-                  <Bar key={j.id} dataKey={`J${i+1}`} name={`Judge ${i+1}`} fill={judgeColors[i]} radius={[2, 2, 0, 0]} />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+      {/* Printable Official Certificate Sheet (hidden on screen, visible on print) */}
+      <div className={styles.printSection}>
+        <div className={styles.printHeader}>
+          <h2>UNIVERSITY OF CEBU LAPU-LAPU AND MANDAUE</h2>
+          <p>College of Teacher Education · Society of Future Educators and Administrators</p>
+          <h3 style={{ marginTop: "1rem", textTransform: "uppercase" }}>{competition.name}</h3>
+          <p>Academic Year {competition.academicYear} · Official Event Tabulation</p>
+          <h4 style={{ marginTop: "1rem", textDecoration: "underline", color: "#1e3a8a" }}>{printTitle}</h4>
         </div>
-        <div className={styles.chartCard} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', maxHeight: '380px' }}>
-          <div className={styles.chartTitle}>Average Criteria Breakdown</div>
-          {results.map(r => {
-            let c1 = 0, c2 = 0, c3 = 0, c4 = 0, count = 0;
-            JUDGES.forEach(j => {
-              const ws = r.judgeScores[j.id];
-              if (ws) {
-                c1 += ws.raw.c1 * 0.3 * 20;
-                c2 += ws.raw.c2 * 0.25 * 20;
-                c3 += ws.raw.c3 * 0.25 * 20;
-                c4 += ws.raw.c4 * 0.2 * 20;
-                count++;
-              }
-            });
-            if(count > 0) { c1/=count; c2/=count; c3/=count; c4/=count; }
-            const pieData = [
-              { name: 'C1: Thematic Songwriting (30%)', value: c1, color: '#3b82f6' },
-              { name: 'C2: Musicality & Vocal Execution (25%)', value: c2, color: '#8b5cf6' },
-              { name: 'C3: Choreography & Sync (25%)', value: c3, color: '#10b981' },
-              { name: 'C4: Showmanship & Impact (20%)', value: c4, color: '#f59e0b' }
-            ];
 
-            return (
-              <div key={r.participant.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderBottom: '1px solid var(--gray-100)', paddingBottom: '0.75rem' }}>
-                <div style={{ width: 100, height: 100, flexShrink: 0 }} title="Hover chart slices to view criteria breakdown">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Tooltip 
-                        formatter={(value: any, name: any) => [`${Number(value).toFixed(2)} pts`, name]} 
-                        contentStyle={{ borderRadius: '8px', fontSize: '12px', padding: '6px 10px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
-                      />
-                      <Pie 
-                        data={pieData} 
-                        dataKey="value" 
-                        cx="50%" 
-                        cy="50%" 
-                        innerRadius={20} 
-                        outerRadius={42} 
-                        isAnimationActive={false}
-                      >
-                        {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div style={{ flex: 1, fontSize: '0.85rem' }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--blue-900)', marginBottom: '0.2rem' }}>
-                    #{r.participant.order} {r.participant.name}
-                  </div>
-                  <div style={{ color: 'var(--gray-600)', fontWeight: 600, marginBottom: '0.4rem' }}>
-                    Overall Avg: <span style={{ color: 'var(--blue-600)' }}>{r.averageWeighted.toFixed(2)} / 100</span>
-                  </div>
-                  
-                  {/* Criteria Legend Badges */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                    <span 
-                      style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.15rem 0.45rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'help' }}
-                      title="C1: Thematic Songwriting (30% weight)"
-                    >
-                      🔵 C1: {c1.toFixed(1)}
-                    </span>
-                    <span 
-                      style={{ background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', padding: '0.15rem 0.45rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'help' }}
-                      title="C2: Musicality & Pop Vocal Execution (25% weight)"
-                    >
-                      🟣 C2: {c2.toFixed(1)}
-                    </span>
-                    <span 
-                      style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', padding: '0.15rem 0.45rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'help' }}
-                      title="C3: Choreography & Synchronization (25% weight)"
-                    >
-                      🟢 C3: {c3.toFixed(1)}
-                    </span>
-                    <span 
-                      style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', padding: '0.15rem 0.45rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'help' }}
-                      title="C4: Showmanship & Audience Impact (20% weight)"
-                    >
-                      🟠 C4: {c4.toFixed(1)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className={styles.rankingsGrid}>
-        <div className={styles.rankingBox}>
-          <div className={styles.rankingTitle}><Trophy size={18} color="var(--color-warning)" /> Overall Top Rankings</div>
-          <ul className={styles.rankList}>
-            {results.slice().sort((a, b) => a.rank - b.rank).map(r => (
-              <li key={r.participant.id} className={`${styles.rankItem} ${r.rank <= 3 ? styles.rankHighlight : ''}`}>
-                <span>{getMedal(r.rank)} {r.participant.name}</span>
-                <span>{r.averageWeighted.toFixed(2)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className={styles.rankingBox}>
-          <div className={styles.rankingTitle}>Best in Vocal Execution (C1+C2)</div>
-          <ul className={styles.rankList}>
-            {bestVocal.map((r, i) => (
-              <li key={r.participant.id} className={`${styles.rankItem} ${i === 0 ? styles.rankHighlight : ''}`}>
-                <span>{i === 0 ? '🥇 ' : `${i+1}. `}{r.participant.name}</span>
-                <span>{r.averageVocal.toFixed(2)}%</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className={styles.rankingBox}>
-          <div className={styles.rankingTitle}>Best in Pop Choreo (C3+C4)</div>
-          <ul className={styles.rankList}>
-            {bestChoreo.map((r, i) => (
-              <li key={r.participant.id} className={`${styles.rankItem} ${i === 0 ? styles.rankHighlight : ''}`}>
-                <span>{i === 0 ? '🥇 ' : `${i+1}. `}{r.participant.name}</span>
-                <span>{r.averageChoreo.toFixed(2)}%</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      <h3 style={{ marginBottom: '1rem', marginTop: '2rem' }}>Full Summary Table</h3>
-      <div className="table-wrap">
-        <table>
+        <table className={styles.printTable}>
           <thead>
             <tr>
               <th>Rank</th>
-              <th>Participant</th>
-              <th>Avg Score (/100)</th>
-              <th>Vocal (C1+C2)</th>
-              <th>Choreo (C3+C4)</th>
-              <th>Vocal Rank</th>
-              <th>Choreo Rank</th>
+              <th>Participant / Sub-Org Name</th>
+              <th>Official Score (%)</th>
+              <th>Award Status</th>
             </tr>
           </thead>
           <tbody>
-            {results.slice().sort((a,b) => a.rank - b.rank).map(r => (
-              <tr key={r.participant.id}>
-                <td style={{ fontWeight: 'bold' }}>{r.rank}</td>
-                <td>{r.participant.name}</td>
-                <td style={{ fontWeight: 'bold', color: 'var(--blue-700)' }}>{r.averageWeighted.toFixed(2)}</td>
-                <td>{r.averageVocal.toFixed(2)}%</td>
-                <td>{r.averageChoreo.toFixed(2)}%</td>
-                <td>{r.vocalRank}</td>
-                <td>{r.choreoRank}</td>
+            {printRows.map((row) => (
+              <tr key={row.rank + row.name}>
+                <td style={{ fontWeight: "bold" }}>Rank {row.rank}</td>
+                <td>{row.name}</td>
+                <td style={{ fontWeight: "bold" }}>{row.scoreStr}</td>
+                <td>{row.rank === 1 ? "🏆 Winner (1st Place)" : row.rank <= 3 ? "Runner Up" : "Participant"}</td>
               </tr>
             ))}
           </tbody>
         </table>
+
+        {/* Signature Section */}
+        <div className={styles.signatures}>
+          <div className={styles.sigBlock}>
+            <div className={styles.sigLine}>Head Tabulator Signature</div>
+          </div>
+          <div className={styles.sigBlock}>
+            <div className={styles.sigLine}>Board of Judges Representative</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Screen Only Section */}
+      <div className={styles.noPrint}>
+        {/* Print / PDF Controller */}
+        <div className="card" style={{ padding: "1.25rem", marginBottom: "1.5rem", background: "var(--blue-50)", border: "1px solid var(--blue-200)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+            <div>
+              <h4 style={{ margin: 0, color: "var(--blue-900)" }}>Print / Export Official PDF Ranking Certificate</h4>
+              <p style={{ fontSize: "0.85rem", color: "var(--blue-700)", margin: "0.2rem 0 0 0" }}>
+                Select an award category to generate a clean, official printable document with signature lines.
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <select
+                className="input"
+                style={{ width: "240px", background: "white" }}
+                value={printAwardId}
+                onChange={(e) => setPrintAwardId(e.target.value)}
+              >
+                <option value="overall">🏆 Overall Top Rankings</option>
+                <option value="vocal">🎤 Best in Vocal Execution</option>
+                <option value="choreo">💃 Best in Pop Choreography</option>
+                {awards.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    🌟 {a.name}
+                  </option>
+                ))}
+              </select>
+              <button className="btn btn-primary" onClick={handlePrint}>
+                <Printer size={18} /> Print / Export PDF
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Visualizations */}
+        <div className={styles.chartsGrid}>
+          <div className={styles.chartCard}>
+            <div className={styles.chartTitle}>Weighted Scores per Judge</div>
+            <div style={{ height: 300 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barData}>
+                  <XAxis dataKey="name" fontSize={12} />
+                  <YAxis domain={[0, 100]} fontSize={12} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: "12px" }} />
+                  {activeJudges.map((j, i) => (
+                    <Bar key={j.id} dataKey={`J${i + 1}`} name={`Judge ${i + 1}`} fill={judgeColors[i % judgeColors.length]} radius={[2, 2, 0, 0]} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Average Criteria Breakdown */}
+          <div className={styles.chartCard} style={{ display: "flex", flexDirection: "column", gap: "1rem", overflowY: "auto", maxHeight: "380px" }}>
+            <div className={styles.chartTitle}>Average Criteria Breakdown</div>
+            {results.map((r) => {
+              const pieData = criteria.map((c) => {
+                let sum = 0,
+                  cnt = 0;
+                activeJudges.forEach((j) => {
+                  const ws = r.judgeScores[j.id];
+                  if (ws && ws.raw[c.key]) {
+                    sum += ws.raw[c.key] * (c.weight / 100) * 20;
+                    cnt++;
+                  }
+                });
+                const avgVal = cnt > 0 ? sum / cnt : 0;
+                return {
+                  name: `${c.label} (${c.weight}%)`,
+                  value: avgVal,
+                  color: c.color,
+                };
+              });
+
+              return (
+                <div key={r.participant.id} style={{ display: "flex", alignItems: "center", gap: "1rem", borderBottom: "1px solid var(--gray-100)", paddingBottom: "0.75rem" }}>
+                  <div style={{ width: 90, height: 90, flexShrink: 0 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Tooltip
+                          formatter={(value: any, name: any) => [`${Number(value).toFixed(2)} pts`, name]}
+                          contentStyle={{ borderRadius: "8px", fontSize: "12px", padding: "6px 10px" }}
+                        />
+                        <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={18} outerRadius={38} isAnimationActive={false}>
+                          {pieData.map((entry, i) => (
+                            <Cell key={i} fill={entry.color} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ flex: 1, fontSize: "0.85rem" }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--blue-900)", marginBottom: "0.2rem" }}>
+                      #{r.participant.order} {r.participant.name}
+                    </div>
+                    <div style={{ color: "var(--gray-600)", fontWeight: 600 }}>
+                      Overall Avg: <span style={{ color: "var(--blue-600)" }}>{r.averageWeighted.toFixed(2)}%</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Custom "Ways to Win" Award Creator */}
+        <div className="card" style={{ padding: "1.25rem", marginBottom: "2rem", background: "var(--gray-50)" }}>
+          <h4 style={{ margin: "0 0 0.5rem 0", color: "var(--blue-900)" }}>Add Custom "Ways to Win" Award Category</h4>
+          <p style={{ fontSize: "0.85rem", color: "var(--color-text-muted)", marginBottom: "1rem" }}>
+            Select which criteria are used to determine winners for this award category.
+          </p>
+          <form onSubmit={handleAddAward} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <input
+              type="text"
+              placeholder="Award Title (e.g. Best in Vocal Execution)"
+              value={awardName}
+              onChange={(e) => setAwardName(e.target.value)}
+              className="input"
+              required
+            />
+            <div>
+              <label style={{ fontSize: "0.85rem", fontWeight: 600, display: "block", marginBottom: "0.4rem" }}>
+                Select Criteria Included:
+              </label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+                {criteria.map((c) => (
+                  <label key={c.id || c.key} style={{ fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedCriteria.includes(c.key) || selectedCriteria.includes(c.id)}
+                      onChange={(e) => {
+                        const targetKey = c.key || c.id;
+                        if (e.target.checked) {
+                          setSelectedCriteria([...selectedCriteria, targetKey]);
+                        } else {
+                          setSelectedCriteria(selectedCriteria.filter((k) => k !== targetKey));
+                        }
+                      }}
+                    />
+                    {c.label} ({c.weight}%)
+                  </label>
+                ))}
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary" style={{ alignSelf: "flex-start" }}>
+              <Plus size={16} /> Create Award Category
+            </button>
+          </form>
+        </div>
+
+        {/* Dynamic Rankings & Ways to Win Cards */}
+        <div className={styles.rankingsGrid}>
+          {/* Overall Top Rankings */}
+          <div className={styles.rankingBox}>
+            <div className={styles.rankingTitle}>
+              <span>
+                <Trophy size={18} color="var(--color-warning)" /> Overall Top Rankings
+              </span>
+            </div>
+            <ul className={styles.rankList}>
+              {results
+                .slice()
+                .sort((a, b) => a.rank - b.rank)
+                .map((r) => (
+                  <li key={r.participant.id} className={`${styles.rankItem} ${r.rank <= 3 ? styles.rankHighlight : ""}`}>
+                    <span>
+                      {getMedal(r.rank)} {r.participant.name}
+                    </span>
+                    <span>{r.averageWeighted.toFixed(2)}%</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+
+          {/* Built-in Vocal Execution */}
+          <div className={styles.rankingBox}>
+            <div className={styles.rankingTitle}>Best in Vocal Execution (C1+C2)</div>
+            <ul className={styles.rankList}>
+              {results
+                .slice()
+                .sort((a, b) => a.vocalRank - b.vocalRank)
+                .map((r, i) => (
+                  <li key={r.participant.id} className={`${styles.rankItem} ${i === 0 ? styles.rankHighlight : ""}`}>
+                    <span>
+                      {i === 0 ? "🥇 " : `${i + 1}. `}
+                      {r.participant.name}
+                    </span>
+                    <span>{r.averageVocal.toFixed(2)}%</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+
+          {/* Built-in Pop Choreography */}
+          <div className={styles.rankingBox}>
+            <div className={styles.rankingTitle}>Best in Pop Choreo (C3+C4)</div>
+            <ul className={styles.rankList}>
+              {results
+                .slice()
+                .sort((a, b) => a.choreoRank - b.choreoRank)
+                .map((r, i) => (
+                  <li key={r.participant.id} className={`${styles.rankItem} ${i === 0 ? styles.rankHighlight : ""}`}>
+                    <span>
+                      {i === 0 ? "🥇 " : `${i + 1}. `}
+                      {r.participant.name}
+                    </span>
+                    <span>{r.averageChoreo.toFixed(2)}%</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+
+          {/* Dynamic Custom Award Categories */}
+          {awards.map((award) => {
+            const sortedAward = results
+              .slice()
+              .sort((a, b) => (a.awardRanks?.[award.id] || 99) - (b.awardRanks?.[award.id] || 99));
+
+            return (
+              <div key={award.id} className={styles.rankingBox}>
+                <div className={styles.rankingTitle}>
+                  {editingAwardId === award.id ? (
+                    <div style={{ display: "flex", gap: "0.3rem", width: "100%" }}>
+                      <input
+                        type="text"
+                        className="input"
+                        style={{ padding: "0.2rem 0.4rem", fontSize: "0.85rem" }}
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                      />
+                      <button className="btn btn-primary btn-sm" onClick={() => handleSaveRename(award.id)}>
+                        <Check size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span>🌟 {award.name}</span>
+                      <div style={{ display: "flex", gap: "0.2rem" }}>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ padding: "0.2rem" }}
+                          onClick={() => {
+                            setEditingAwardId(award.id);
+                            setEditName(award.name);
+                          }}
+                          title="Rename Award"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ padding: "0.2rem", color: "var(--color-danger)" }}
+                          onClick={() => handleDeleteAward(award.id, award.name)}
+                          title="Delete Award"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <ul className={styles.rankList}>
+                  {sortedAward.map((r, i) => (
+                    <li key={r.participant.id} className={`${styles.rankItem} ${i === 0 ? styles.rankHighlight : ""}`}>
+                      <span>
+                        {i === 0 ? "🥇 " : `${i + 1}. `}
+                        {r.participant.name}
+                      </span>
+                      <span>{(r.awardAverages?.[award.id] || 0).toFixed(2)}%</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Full Summary Table */}
+        <h3 style={{ marginBottom: "1rem", marginTop: "2rem" }}>Full Summary Table</h3>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Participant</th>
+                <th>Avg Score (/100%)</th>
+                <th>Vocal (C1+C2)</th>
+                <th>Choreo (C3+C4)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results
+                .slice()
+                .sort((a, b) => a.rank - b.rank)
+                .map((r) => (
+                  <tr key={r.participant.id}>
+                    <td style={{ fontWeight: "bold" }}>Rank {r.rank}</td>
+                    <td>{r.participant.name}</td>
+                    <td style={{ fontWeight: "bold", color: "var(--blue-700)" }}>{r.averageWeighted.toFixed(2)}%</td>
+                    <td>{r.averageVocal.toFixed(2)}%</td>
+                    <td>{r.averageChoreo.toFixed(2)}%</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 }
 
-function TabSettings({ competition, onUpdate }: { competition: Competition, onUpdate: (c: Competition) => void }) {
+// ─── 7. Settings Tab ──────────────────────────────────────────────────────────
+
+function TabSettings({
+  competition,
+  judges,
+  onUpdate,
+}: {
+  competition: Competition;
+  judges: Judge[];
+  onUpdate: (c: Competition) => void;
+}) {
   const [loading, setLoading] = useState(false);
   const [visiblePins, setVisiblePins] = useState<Record<string, boolean>>({});
 
   async function handleToggleStatus() {
-    if(!confirm(`Are you sure you want to ${competition.status === 'active' ? 'lock' : 'unlock'} this competition?`)) return;
+    if (!confirm(`Are you sure you want to ${competition.status === "active" ? "lock" : "unlock"} this competition?`)) return;
     setLoading(true);
-    const newStatus = competition.status === 'active' ? 'locked' : 'active';
+    const newStatus = competition.status === "active" ? "locked" : "active";
     await updateCompetitionStatus(competition.id, newStatus);
     onUpdate({ ...competition, status: newStatus });
     setLoading(false);
   }
 
   function togglePin(id: string) {
-    setVisiblePins(prev => ({ ...prev, [id]: !prev[id] }));
+    setVisiblePins((prev) => ({ ...prev, [id]: !prev[id] }));
   }
+
+  const activeJudges = judges.length > 0 ? judges : INITIAL_JUDGES;
 
   return (
     <div>
-      <h3 style={{ marginBottom: '1rem' }}>Competition Settings</h3>
-      
-      <div className="card" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <h3 style={{ marginBottom: "1rem" }}>Competition Settings</h3>
+
+      <div className="card" style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
         <div>
-          <h4 style={{ marginBottom: '0.25rem' }}>Round Status: {competition.status.toUpperCase()}</h4>
-          <p style={{ fontSize: '0.9rem', margin: 0 }}>{competition.status === 'active' ? 'Judges can submit and edit scores.' : 'Round is locked. No more submissions allowed.'}</p>
+          <h4 style={{ marginBottom: "0.25rem" }}>Round Status: {competition.status.toUpperCase()}</h4>
+          <p style={{ fontSize: "0.9rem", margin: 0 }}>
+            {competition.status === "active"
+              ? "Judges can submit and edit scores."
+              : "Round is locked. No more submissions allowed."}
+          </p>
         </div>
-        <button onClick={handleToggleStatus} disabled={loading} className={`btn ${competition.status === 'active' ? 'btn-danger' : 'btn-primary'}`}>
-          {competition.status === 'active' ? <><Lock size={16} /> Lock Round</> : <><Unlock size={16} /> Unlock Round</>}
+        <button onClick={handleToggleStatus} disabled={loading} className={`btn ${competition.status === "active" ? "btn-danger" : "btn-primary"}`}>
+          {competition.status === "active" ? (
+            <>
+              <Lock size={16} /> Lock Round
+            </>
+          ) : (
+            <>
+              <Unlock size={16} /> Unlock Round
+            </>
+          )}
         </button>
       </div>
 
-      <h4 style={{ marginBottom: '1rem' }}>Judge PINs</h4>
-      <div className="table-wrap" style={{ marginBottom: '2rem' }}>
+      <h4 style={{ marginBottom: "1rem" }}>Judge PINs Overview</h4>
+      <div className="table-wrap">
         <table>
           <thead>
-            <tr><th>Judge</th><th>PIN</th><th>Actions</th></tr>
+            <tr>
+              <th>Judge Name</th>
+              <th>PIN</th>
+              <th>Actions</th>
+            </tr>
           </thead>
           <tbody>
-            {JUDGES.map(j => (
+            {activeJudges.map((j) => (
               <tr key={j.id}>
                 <td>{j.name}</td>
-                <td style={{ fontFamily: 'monospace', fontSize: '1.1rem' }}>
-                  {visiblePins[j.id] ? j.pin : '••••'}
-                </td>
+                <td style={{ fontFamily: "monospace", fontSize: "1.1rem" }}>{visiblePins[j.id] ? j.pin : "••••"}</td>
                 <td>
-                  <button onClick={() => togglePin(j.id)} className="btn btn-ghost" style={{ padding: '0.3rem 0.5rem' }}>
+                  <button onClick={() => togglePin(j.id)} className="btn btn-ghost" style={{ padding: "0.3rem 0.5rem" }}>
                     {visiblePins[j.id] ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </td>
@@ -644,7 +1364,6 @@ function TabSettings({ competition, onUpdate }: { competition: Competition, onUp
           </tbody>
         </table>
       </div>
-      <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>* PINs are configured via environment variables or Firestore config.</p>
     </div>
   );
 }
