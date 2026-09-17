@@ -1049,3 +1049,59 @@ export async function getPins(): Promise<Record<string, string> | null> {
 }
 
 export async function updatePins(pins: Record<string, string>): Promise<void> {}
+
+// ─── Judge Assignment Coverage Logic ───────────────────────────────────────────
+
+/**
+ * Helper to retrieve criteria keys for an award category.
+ * If award.criteriaKeys is specified and non-empty, return it.
+ * Otherwise, default to all competition criteria keys.
+ */
+export function getAwardCriteriaKeys(award: AwardCategory, allCriteria: CriteriaItem[]): string[] {
+  if (award.criteriaKeys && award.criteriaKeys.length > 0) {
+    return award.criteriaKeys;
+  }
+  return allCriteria.map((c) => c.key || c.id);
+}
+
+/**
+ * Checks if Judge (judgeId) is assigned to `targetAward`.
+ * 
+ * A judge is assigned to `targetAward` if:
+ * 1. `targetAward` has no assignedJudgeIds (undefined), meaning all judges assigned by default.
+ * 2. OR `targetAward.assignedJudgeIds` explicitly includes `judgeId`.
+ * 3. OR Judge is assigned to any OTHER award `parentAward` in `allAwards` whose criteria set
+ *    COVERS ALL criteria in `targetAward` (i.e. targetAwardCriteria ⊆ parentAwardCriteria).
+ */
+export function isJudgeAssignedToAward(
+  judgeId: string,
+  targetAward: AwardCategory,
+  allAwards: AwardCategory[],
+  allCriteria: CriteriaItem[]
+): boolean {
+  const targetRaw = targetAward.assignedJudgeIds;
+  if (targetRaw === undefined || targetRaw.includes(judgeId)) {
+    return true;
+  }
+
+  const targetKeys = getAwardCriteriaKeys(targetAward, allCriteria);
+  if (targetKeys.length === 0) return false;
+
+  for (const parentAward of allAwards) {
+    if (parentAward.id === targetAward.id) continue;
+
+    const parentRaw = parentAward.assignedJudgeIds;
+    const isJudgeInParent = parentRaw === undefined || parentRaw.includes(judgeId);
+
+    if (isJudgeInParent) {
+      const parentKeys = getAwardCriteriaKeys(parentAward, allCriteria);
+      const coversAll = parentKeys.length > 0 && targetKeys.every((key) => parentKeys.includes(key));
+      if (coversAll) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+

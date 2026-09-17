@@ -9,6 +9,8 @@ import {
   getCompetition,
   subscribeCriteriaSets,
   subscribeAwards,
+  isJudgeAssignedToAward,
+  getAwardCriteriaKeys,
 } from "@/lib/db";
 import {
   DEFAULT_CRITERIA,
@@ -104,14 +106,14 @@ export default function ScoreScreen(props: {
       : (DEFAULT_CRITERIA as any);
 
   // Filter criteria assigned to THIS judge via Award Categories
-  const assignedAwards = awards.filter((a) => {
-    if (a.assignedJudgeIds === undefined) return true;
-    return a.assignedJudgeIds.includes(params.judgeId);
-  });
+  const assignedAwards = awards.filter((a) =>
+    isJudgeAssignedToAward(params.judgeId, a, awards, allActiveCriteria)
+  );
 
   const assignedCriteriaKeys = new Set<string>();
   assignedAwards.forEach((a) => {
-    a.criteriaKeys.forEach((k) => assignedCriteriaKeys.add(k));
+    const keys = getAwardCriteriaKeys(a, allActiveCriteria);
+    keys.forEach((k) => assignedCriteriaKeys.add(k));
   });
 
   const activeCriteria =

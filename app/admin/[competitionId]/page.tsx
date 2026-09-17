@@ -24,6 +24,8 @@ import {
   renameAwardCategory,
   deleteAwardCategory,
   assignJudgesToAward,
+  isJudgeAssignedToAward,
+  getAwardCriteriaKeys,
 } from "@/lib/db";
 import { buildResults } from "@/lib/scoring";
 import {
@@ -790,10 +792,9 @@ function TabStatus({
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
             {awards.map((award) => {
-              const rawAssigned = award.assignedJudgeIds !== undefined
-                ? award.assignedJudgeIds
-                : judges.map((j) => j.id);
-              const validAssigned = rawAssigned.filter((id) => judges.some((j) => j.id === id));
+              const assignedJudgesForAward = judges.filter((j) =>
+                isJudgeAssignedToAward(j.id, award, awards, criteria)
+              );
 
               return (
                 <div key={award.id} style={{ background: "#ffffff", padding: "0.8rem 1rem", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
@@ -802,22 +803,47 @@ function TabStatus({
                       🏆 {award.name}
                     </div>
                     <span style={{ fontSize: "0.78rem", color: "var(--gray-500)" }}>
-                      {validAssigned.length} of {judges.length} judges assigned
+                      {assignedJudgesForAward.length} of {judges.length} judges assigned
                     </span>
                   </div>
                   <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
                     {judges.map((j) => {
-                      const isChecked = validAssigned.includes(j.id);
+                      const isChecked = isJudgeAssignedToAward(j.id, award, awards, criteria);
+                      const rawAssigned = award.assignedJudgeIds !== undefined
+                        ? award.assignedJudgeIds
+                        : judges.map((judge) => judge.id);
+
                       return (
                         <label key={j.id} style={{ fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
                           <input
                             type="checkbox"
                             checked={isChecked}
                             onChange={async () => {
-                              const updated = isChecked
-                                ? validAssigned.filter((id) => id !== j.id)
-                                : [...validAssigned, j.id];
-                              await assignJudgesToAward(compId, award.id, updated);
+                              if (!isChecked) {
+                                const updated = Array.from(new Set([...rawAssigned, j.id]));
+                                await assignJudgesToAward(compId, award.id, updated);
+                              } else {
+                                const updated = rawAssigned.filter((id) => id !== j.id);
+                                await assignJudgesToAward(compId, award.id, updated);
+
+                                // Also uncheck judge from parent awards whose criteria cover this award
+                                const targetKeys = getAwardCriteriaKeys(award, criteria);
+                                for (const parentAward of awards) {
+                                  if (parentAward.id === award.id) continue;
+                                  const parentRaw = parentAward.assignedJudgeIds !== undefined
+                                    ? parentAward.assignedJudgeIds
+                                    : judges.map((judge) => judge.id);
+
+                                  if (parentRaw.includes(j.id)) {
+                                    const parentKeys = getAwardCriteriaKeys(parentAward, criteria);
+                                    const coversAll = targetKeys.length > 0 && targetKeys.every((k) => parentKeys.includes(k));
+                                    if (coversAll) {
+                                      const updatedParent = parentRaw.filter((id) => id !== j.id);
+                                      await assignJudgesToAward(compId, parentAward.id, updatedParent);
+                                    }
+                                  }
+                                }
+                              }
                             }}
                           />
                           {j.name}
@@ -1305,11 +1331,9 @@ function TabSummary({
       ? awards.find((a) => a.id === "award_overall")
       : awards.find((a) => a.id === printAwardId);
 
-  const assignedJudgeIds = selectedAwardObj?.assignedJudgeIds;
-  const printJudges =
-    assignedJudgeIds !== undefined
-      ? activeJudges.filter((j) => assignedJudgeIds.includes(j.id))
-      : activeJudges;
+  const printJudges = selectedAwardObj
+    ? activeJudges.filter((j) => isJudgeAssignedToAward(j.id, selectedAwardObj, awards, criteria))
+    : activeJudges;
 
   return (
     <div>

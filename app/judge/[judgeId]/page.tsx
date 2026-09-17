@@ -1,7 +1,7 @@
 "use client";
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getCompetitions, subscribeCompetitions, subscribeAwards } from "@/lib/db";
+import { getCompetitions, subscribeCompetitions, subscribeAwards, isJudgeAssignedToAward } from "@/lib/db";
 import type { AwardCategory, Competition } from "@/lib/types";
 import { ChevronRight } from "lucide-react";
 import styles from "./page.module.css";
@@ -20,28 +20,28 @@ const fallbackCompetition: Competition = {
   createdAt: Date.now(),
 };
 
-export default function JudgeHome(props: { params: Promise<{ judgeId: string }> }) {
-  const params = use(props.params);
+export default function JudgeHomePage({ params: paramsPromise }: { params: Promise<{ judgeId: string }> }) {
+  const params = use(paramsPromise);
   const router = useRouter();
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [compAwardsMap, setCompAwardsMap] = useState<Record<string, AwardCategory[]>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getCompetitions();
-    const unsub = subscribeCompetitions((comps) => {
-      if (comps.length > 0) {
-        setCompetitions(comps);
+    const unsubComp = subscribeCompetitions((data) => {
+      if (data && data.length > 0) {
+        setCompetitions(data);
       } else {
         setCompetitions([fallbackCompetition]);
       }
       setLoading(false);
     });
-    return () => unsub();
+    return () => unsubComp();
   }, []);
 
   useEffect(() => {
-    const unsubs: (() => void)[] = [];
+    if (competitions.length === 0) return;
+    const unsubs: Array<() => void> = [];
     competitions.forEach((comp) => {
       const unsub = subscribeAwards(comp.id, (awards) => {
         setCompAwardsMap((prev) => ({ ...prev, [comp.id]: awards }));
@@ -56,10 +56,7 @@ export default function JudgeHome(props: { params: Promise<{ judgeId: string }> 
   const assignedCompetitions = competitions.filter((comp) => {
     const awards = compAwardsMap[comp.id];
     if (!awards || awards.length === 0) return true;
-    return awards.some((award) => {
-      if (award.assignedJudgeIds === undefined) return true;
-      return award.assignedJudgeIds.includes(params.judgeId);
-    });
+    return awards.some((award) => isJudgeAssignedToAward(params.judgeId, award, awards, []));
   });
 
   return (
