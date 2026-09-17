@@ -98,10 +98,28 @@ export default function ScoreScreen(props: {
 
   // Determine active criteria items from active sets
   const activeSets = criteriaSets.filter((s) => s.isActive);
-  const activeCriteria: CriteriaItem[] =
+  const allActiveCriteria: CriteriaItem[] =
     activeSets.length > 0
       ? activeSets.flatMap((s) => s.items)
       : (DEFAULT_CRITERIA as any);
+
+  // Filter criteria assigned to THIS judge via Award Categories
+  const assignedAwards = awards.filter((a) => {
+    if (a.assignedJudgeIds === undefined) return true;
+    return a.assignedJudgeIds.includes(params.judgeId);
+  });
+
+  const assignedCriteriaKeys = new Set<string>();
+  assignedAwards.forEach((a) => {
+    a.criteriaKeys.forEach((k) => assignedCriteriaKeys.add(k));
+  });
+
+  const activeCriteria =
+    awards.length > 0
+      ? allActiveCriteria.filter(
+          (c) => assignedCriteriaKeys.has(c.key) || assignedCriteriaKeys.has(c.id)
+        )
+      : allActiveCriteria;
 
   // Map criteria key to associated Award Categories / Sets
   const criterionAwardsMap: Record<string, string[]> = {};
@@ -169,6 +187,27 @@ export default function ScoreScreen(props: {
       {isLocked && (
         <div className={styles.lockedAlert}>
           <Lock size={18} /> Scores are locked for this competition.
+        </div>
+      )}
+
+      {activeCriteria.length === 0 && (
+        <div
+          className="card"
+          style={{
+            padding: "1.5rem",
+            background: "#fffbebe6",
+            border: "1px solid #fef08a",
+            color: "#854d0e",
+            textAlign: "center",
+            marginBottom: "1.5rem",
+          }}
+        >
+          <h4 style={{ margin: "0 0 0.5rem 0", color: "#92400e" }}>
+            ⚠️ Not Assigned to Award Categories
+          </h4>
+          <p style={{ margin: 0, fontSize: "0.9rem" }}>
+            You are currently not assigned to score any active award categories for this competition. Please ask the event administrator to assign you to an award category.
+          </p>
         </div>
       )}
 

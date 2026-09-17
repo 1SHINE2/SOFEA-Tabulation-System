@@ -202,7 +202,7 @@ export default function AdminDashboard(props: {
           <TabStatus compId={competitionId} participants={participants} scores={scores} judges={judges} criteria={criteria} criteriaSets={criteriaSets} awards={awards} />
         )}
         {activeTab === "live" && (
-          <TabLive results={results} judges={judges} criteria={criteria} />
+          <TabLive results={results} judges={judges} criteria={criteria} awards={awards} />
         )}
         {activeTab === "summary" && (
           <TabSummary compId={competitionId} competition={competition} results={results} judges={judges} criteria={criteria} awards={awards} />
@@ -684,81 +684,85 @@ function TabStatus({
   awards: AwardCategory[];
 }) {
   const [viewMode, setViewMode] = useState<"participant" | "matrix">("participant");
+  const [appliedNotice, setAppliedNotice] = useState(false);
   const activeJudges = judges.length > 0 ? judges : INITIAL_JUDGES;
+
+  const handleApplyAssignments = async () => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("sofea_tabulation_db_sync"));
+      try {
+        localStorage.setItem("sofea_sync_ping", Date.now().toString());
+      } catch (e) {}
+    }
+    setAppliedNotice(true);
+    setTimeout(() => setAppliedNotice(false), 3000);
+  };
 
   return (
     <div>
       {/* Assign Judges per Award Category Card */}
       {awards.length > 0 && judges.length > 0 && (
         <div className="card" style={{ padding: "1.25rem", marginBottom: "1.5rem", background: "var(--blue-50)", border: "1px solid var(--blue-200)" }}>
-          <h4 style={{ margin: "0 0 0.5rem 0", color: "var(--blue-900)" }}>
-            Assign Judges to Award Categories
-          </h4>
-          <p style={{ fontSize: "0.85rem", color: "var(--gray-600)", margin: "0 0 1rem 0" }}>
-            Select which judges are assigned to score each specific award category.
-          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.8rem", flexWrap: "wrap", gap: "0.5rem" }}>
+            <div>
+              <h4 style={{ margin: "0 0 0.2rem 0", color: "var(--blue-900)" }}>
+                Assign Judges to Award Categories
+              </h4>
+              <p style={{ fontSize: "0.85rem", color: "var(--gray-600)", margin: 0 }}>
+                Select which judges are assigned to score each specific award category.
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              {appliedNotice && (
+                <span className="badge badge-success" style={{ fontSize: "0.82rem" }}>
+                  ✓ Real-time Sync Applied!
+                </span>
+              )}
+              <button className="btn btn-primary btn-sm" onClick={handleApplyAssignments}>
+                Apply Real-Time Assignments
+              </button>
+            </div>
+          </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
             {awards.map((award) => {
-              const assigned = award.assignedJudgeIds && award.assignedJudgeIds.length > 0
+              const assigned = award.assignedJudgeIds !== undefined
                 ? award.assignedJudgeIds
                 : judges.map((j) => j.id);
 
               return (
                 <div key={award.id} style={{ background: "#ffffff", padding: "0.8rem 1rem", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
-                  <div style={{ fontWeight: 600, color: "var(--blue-950)", marginBottom: "0.4rem" }}>
-                    🏆 {award.name}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                    <div style={{ fontWeight: 600, color: "var(--blue-950)" }}>
+                      🏆 {award.name}
+                    </div>
+                    <span style={{ fontSize: "0.78rem", color: "var(--gray-500)" }}>
+                      {assigned.length} of {judges.length} judges assigned
+                    </span>
                   </div>
                   <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                    {judges.map((j) => (
-                      <label key={j.id} style={{ fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={assigned.includes(j.id)}
-                          onChange={async () => {
-                            const current = award.assignedJudgeIds && award.assignedJudgeIds.length > 0
-                              ? award.assignedJudgeIds
-                              : judges.map((x) => x.id);
-                            const updated = current.includes(j.id)
-                              ? current.filter((id) => id !== j.id)
-                              : [...current, j.id];
-                            await assignJudgesToAward(compId, award.id, updated);
-                          }}
-                        />
-                        {j.name}
-                      </label>
-                    ))}
+                    {judges.map((j) => {
+                      const isChecked = assigned.includes(j.id);
+                      return (
+                        <label key={j.id} style={{ fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={async () => {
+                              const updated = isChecked
+                                ? assigned.filter((id) => id !== j.id)
+                                : [...assigned, j.id];
+                              await assignJudgesToAward(compId, award.id, updated);
+                            }}
+                          />
+                          {j.name}
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               );
             })}
-          </div>
-        </div>
-      )}
-
-      {/* Criteria Set Active Selector Bar for Admin */}
-      {criteriaSets.length > 0 && (
-        <div className="card" style={{ padding: "1rem 1.25rem", marginBottom: "1.5rem", background: "var(--blue-50)", border: "1px solid var(--blue-200)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.8rem" }}>
-            <div>
-              <div style={{ fontWeight: 600, color: "var(--blue-900)", fontSize: "0.95rem" }}>
-                Active Criteria Sets for Scoring
-              </div>
-              <div style={{ fontSize: "0.82rem", color: "var(--gray-600)" }}>
-                Select which criteria sets are active and visible for judges to score in real-time.
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              {criteriaSets.map((set) => (
-                <button
-                  key={set.id}
-                  onClick={() => toggleCriteriaSetActive(compId, set.id, !set.isActive)}
-                  className={`btn ${set.isActive ? "btn-primary" : "btn-ghost"}`}
-                  style={{ padding: "0.35rem 0.8rem", fontSize: "0.82rem" }}
-                >
-                  {set.isActive ? "✓ " : "○ "} {set.name} ({set.items.length} items)
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       )}
@@ -934,18 +938,58 @@ function TabLive({
   results,
   judges,
   criteria,
+  awards,
 }: {
   results: any[];
   judges: Judge[];
   criteria: CriteriaItem[];
+  awards: AwardCategory[];
 }) {
+  const [selectedAwardId, setSelectedAwardId] = useState<string>("award_overall");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const sorted = [...results].sort((a, b) => b.averageWeighted - a.averageWeighted);
+
   const activeJudges = judges.length > 0 ? judges : INITIAL_JUDGES;
+
+  const currentAward = awards.find((a) => a.id === selectedAwardId) || {
+    id: "award_overall",
+    name: "Overall Winner",
+    criteriaKeys: criteria.map((c) => c.key || c.id),
+  };
+
+  const sorted = [...results].sort((a, b) => {
+    if (selectedAwardId === "award_overall") {
+      return b.averageWeighted - a.averageWeighted;
+    }
+    const bAvg = b.awardAverages?.[selectedAwardId] || 0;
+    const aAvg = a.awardAverages?.[selectedAwardId] || 0;
+    return bAvg - aAvg;
+  });
 
   return (
     <div>
-      <h3 style={{ marginBottom: "1rem" }}>Live Scores & Overall Weighted Scores</h3>
+      <div style={{ marginBottom: "1.25rem" }}>
+        <h3 style={{ margin: "0 0 0.4rem 0" }}>Live Scores per Award Category</h3>
+        <p style={{ fontSize: "0.88rem", color: "var(--gray-600)", margin: 0 }}>
+          View real-time participant scores grouped by specific award categories. Click "View Breakdown" under Actions to view all criteria scores.
+        </p>
+      </div>
+
+      {/* Award Category Selector Bar */}
+      {awards.length > 0 && (
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
+          {awards.map((award) => (
+            <button
+              key={award.id}
+              onClick={() => setSelectedAwardId(award.id)}
+              className={`btn ${selectedAwardId === award.id ? "btn-primary" : "btn-ghost"}`}
+              style={{ fontSize: "0.85rem", padding: "0.4rem 0.9rem" }}
+            >
+              🏆 {award.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="table-wrap">
         <table>
           <thead>
@@ -956,71 +1000,99 @@ function TabLive({
                   J{i + 1}
                 </th>
               ))}
-              <th style={{ color: "var(--blue-900)", fontWeight: "bold" }}>Overall Weighted Avg (/100%)</th>
-              <th>Actions</th>
+              <th style={{ color: "var(--blue-900)", fontWeight: "bold" }}>
+                {currentAward.name.toUpperCase()} AVG (/100%)
+              </th>
+              <th style={{ textAlign: "right" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map((res) => (
-              <React.Fragment key={res.participant.id}>
-                <tr>
-                  <td style={{ fontWeight: 600 }}>
-                    #{res.participant.order} {res.participant.name}
-                  </td>
-                  {activeJudges.map((j) => {
-                    const ws = res.judgeScores[j.id];
-                    return <td key={j.id}>{ws ? `${ws.weighted.toFixed(2)}%` : "—"}</td>;
-                  })}
-                  <td style={{ fontWeight: "bold", fontSize: "1.05rem", color: "var(--blue-700)" }}>
-                    {res.averageWeighted.toFixed(2)}%
-                  </td>
-                  <td>
-                    <button
-                      className={styles.expandBtn}
-                      onClick={() => setExpandedRow(expandedRow === res.participant.id ? null : res.participant.id)}
-                    >
-                      {expandedRow === res.participant.id ? "Hide Breakdown" : "View Breakdown"}
-                    </button>
-                  </td>
-                </tr>
-                {expandedRow === res.participant.id && (
+            {sorted.map((res) => {
+              const categoryScoreAvg =
+                selectedAwardId === "award_overall"
+                  ? res.averageWeighted
+                  : res.awardAverages?.[selectedAwardId] || 0;
+
+              return (
+                <React.Fragment key={res.participant.id}>
                   <tr>
-                    <td colSpan={activeJudges.length + 3} style={{ padding: 0 }}>
-                      <div className={styles.subTableWrap}>
-                        <table style={{ background: "white", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
-                          <thead>
-                            <tr>
-                              <th>Judge Name</th>
-                              {criteria.map((c) => (
-                                <th key={c.id || c.key}>
-                                  {c.label} ({c.weight}%)
-                                </th>
-                              ))}
-                              <th>Weighted Total</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {activeJudges.map((j) => {
-                              const ws = res.judgeScores[j.id];
-                              if (!ws) return null;
-                              return (
-                                <tr key={j.id}>
-                                  <td>{j.name}</td>
-                                  {criteria.map((c) => (
-                                    <td key={c.id || c.key}>{ws.raw[c.key] || 0} / 5</td>
-                                  ))}
-                                  <td style={{ fontWeight: "bold" }}>{ws.weighted.toFixed(2)}%</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                    <td style={{ fontWeight: 600 }}>
+                      #{res.participant.order} {res.participant.name}
+                    </td>
+                    {activeJudges.map((j) => {
+                      const ws = res.judgeScores[j.id];
+                      let jScoreStr = "—";
+                      if (ws) {
+                        if (selectedAwardId === "award_overall") {
+                          jScoreStr = `${ws.weighted.toFixed(2)}%`;
+                        } else if (ws.awardScores && ws.awardScores[selectedAwardId] !== undefined) {
+                          jScoreStr = `${ws.awardScores[selectedAwardId].toFixed(2)}%`;
+                        }
+                      }
+                      return <td key={j.id}>{jScoreStr}</td>;
+                    })}
+                    <td style={{ fontWeight: "bold", fontSize: "1.05rem", color: "var(--blue-700)" }}>
+                      {categoryScoreAvg.toFixed(2)}%
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        className={styles.expandBtn}
+                        onClick={() =>
+                          setExpandedRow(expandedRow === res.participant.id ? null : res.participant.id)
+                        }
+                      >
+                        {expandedRow === res.participant.id ? "Hide Breakdown" : "View Breakdown"}
+                      </button>
                     </td>
                   </tr>
-                )}
-              </React.Fragment>
-            ))}
+                  {expandedRow === res.participant.id && (
+                    <tr>
+                      <td colSpan={activeJudges.length + 3} style={{ padding: 0 }}>
+                        <div className={styles.subTableWrap}>
+                          <div style={{ padding: "0.5rem 0.8rem", fontWeight: 600, color: "var(--blue-900)", fontSize: "0.85rem", background: "var(--blue-50)" }}>
+                            Detailed Criteria Scores — #{res.participant.order} {res.participant.name}
+                          </div>
+                          <table
+                            style={{
+                              background: "white",
+                              border: "1px solid var(--color-border)",
+                              borderRadius: "var(--radius-sm)",
+                            }}
+                          >
+                            <thead>
+                              <tr>
+                                <th>Judge Name</th>
+                                {criteria.map((c) => (
+                                  <th key={c.id || c.key}>
+                                    {c.label} ({c.weight}%)
+                                  </th>
+                                ))}
+                                <th>Overall Weighted</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {activeJudges.map((j) => {
+                                const ws = res.judgeScores[j.id];
+                                if (!ws) return null;
+                                return (
+                                  <tr key={j.id}>
+                                    <td>{j.name}</td>
+                                    {criteria.map((c) => (
+                                      <td key={c.id || c.key}>{ws.raw[c.key] || 0} / 5</td>
+                                    ))}
+                                    <td style={{ fontWeight: "bold" }}>{ws.weighted.toFixed(2)}%</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
             {sorted.length === 0 && (
               <tr>
                 <td colSpan={activeJudges.length + 3} style={{ textAlign: "center", padding: "2rem" }}>

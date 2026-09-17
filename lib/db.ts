@@ -230,26 +230,86 @@ function saveLocalCriteria(compId: string, items: CriteriaItem[]) {
 
 function getLocalAwards(compId: string): AwardCategory[] {
   if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(`sofea_awards_${compId}`);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return [
+
+  const allCrit = getLocalCriteria(compId);
+  const allKeys = allCrit.map((c) => c.key || c.id);
+
+  const defaultAwards: AwardCategory[] = [
+    {
+      id: "award_overall",
+      name: "Overall Winner",
+      competitionId: compId,
+      criteriaKeys: allKeys.length > 0 ? allKeys : ["c1", "c2", "c3", "c4"],
+      createdAt: 1,
+    },
     {
       id: "award_vocal",
       name: "Best in Vocal Execution",
       competitionId: compId,
       criteriaKeys: ["c1", "c2"],
-      createdAt: 1,
+      createdAt: 2,
     },
     {
       id: "award_choreo",
       name: "Best in Pop Choreography",
       competitionId: compId,
       criteriaKeys: ["c3", "c4"],
-      createdAt: 2,
+      createdAt: 3,
     },
   ];
+
+  let savedAwards: AwardCategory[] = [];
+  try {
+    const raw = localStorage.getItem(`sofea_awards_${compId}`);
+    if (raw) {
+      savedAwards = JSON.parse(raw);
+    }
+  } catch {}
+
+  const mergedMap = new Map<string, AwardCategory>();
+  // Add defaults first
+  defaultAwards.forEach((a) => mergedMap.set(a.id, a));
+
+  // Merge saved awards
+  savedAwards.forEach((a) => {
+    if (a.id === "award_overall") {
+      mergedMap.set(a.id, {
+        ...a,
+        criteriaKeys: Array.from(new Set([...a.criteriaKeys, ...allKeys])),
+      });
+    } else {
+      mergedMap.set(a.id, a);
+    }
+  });
+
+  // Auto-sync Criteria Sets to Award Categories
+  const critSets = getLocalCriteriaSets(compId);
+  critSets.forEach((set) => {
+    if (set.id !== "set_default") {
+      const awardId = "award_" + set.id;
+      const itemKeys = set.items.map((i) => i.key || i.id);
+      if (!mergedMap.has(awardId)) {
+        mergedMap.set(awardId, {
+          id: awardId,
+          name: set.name,
+          competitionId: compId,
+          criteriaKeys: itemKeys,
+          assignedJudgeIds: set.assignedJudgeIds,
+          createdAt: set.createdAt || Date.now(),
+        });
+      } else {
+        const existing = mergedMap.get(awardId)!;
+        mergedMap.set(awardId, {
+          ...existing,
+          name: set.name,
+          criteriaKeys: Array.from(new Set([...existing.criteriaKeys, ...itemKeys])),
+        });
+      }
+    }
+  });
+
+  const result = Array.from(mergedMap.values());
+  return result;
 }
 
 function saveLocalAwards(compId: string, awards: AwardCategory[]) {
@@ -486,8 +546,9 @@ export async function addCriteriaSet(
   competitionId: string,
   name: string
 ): Promise<CriteriaSet> {
+  const setId = "set_" + Date.now();
   const newSet: CriteriaSet = {
-    id: "set_" + Date.now(),
+    id: setId,
     name,
     competitionId,
     isActive: true,
@@ -497,6 +558,18 @@ export async function addCriteriaSet(
   const current = getLocalCriteriaSets(competitionId);
   const updated = [...current, newSet];
   saveLocalCriteriaSets(competitionId, updated);
+
+  // Auto-create matching AwardCategory for this Criteria Set
+  const currentAwards = getLocalAwards(competitionId);
+  const newAward: AwardCategory = {
+    id: "award_" + setId,
+    name: name,
+    competitionId,
+    criteriaKeys: [],
+    createdAt: Date.now(),
+  };
+  saveLocalAwards(competitionId, [...currentAwards, newAward]);
+
   return newSet;
 }
 
@@ -507,6 +580,10 @@ export async function deleteCriteriaSet(
   const current = getLocalCriteriaSets(competitionId);
   const updated = current.filter((s) => s.id !== setId);
   saveLocalCriteriaSets(competitionId, updated);
+
+  const currentAwards = getLocalAwards(competitionId);
+  const updatedAwards = currentAwards.filter((a) => a.id !== "award_" + setId);
+  saveLocalAwards(competitionId, updatedAwards);
 }
 
 export async function toggleCriteriaSetActive(
@@ -547,6 +624,19 @@ export async function addCriteriaItemToSet(
 
   const allFlat = updated.flatMap((s) => s.items);
   saveLocalCriteria(competitionId, allFlat);
+
+  // Sync keys to matching AwardCategory
+  const currentAwards = getLocalAwards(competitionId);
+  const targetSet = sets.find((s) => s.id === setId);
+  const updatedAwards = currentAwards.map((a) => {
+    if (a.id === "award_" + setId || (targetSet && a.name === targetSet.name)) {
+      if (!a.criteriaKeys.includes(key)) {
+        return { ...a, criteriaKeys: [...a.criteriaKeys, key] };
+      }
+    }
+    return a;
+  });
+  saveLocalAwards(competitionId, updatedAwards);
 
   return newItem;
 }
