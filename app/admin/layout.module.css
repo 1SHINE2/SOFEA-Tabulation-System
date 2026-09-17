@@ -26,3 +26,9 @@
 .main {
   min-height: calc(100vh - 72px);
 }
+
+@media print {
+  .header {
+    display: none !important;
+  }
+}

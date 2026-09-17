@@ -204,11 +204,38 @@ function saveLocalCriteriaSets(compId: string, sets: CriteriaSet[]) {
   } catch (e) {}
 }
 
+function getDeletedCriteriaIds(compId: string): string[] {
+  if (typeof window === "undefined") return ["HERE", "HEHE", "crit_here", "crit_hehe"];
+  try {
+    const raw = localStorage.getItem(`sofea_deleted_crit_${compId}`);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.from(new Set([...list, "HERE", "HEHE", "crit_here", "crit_hehe"]));
+  } catch {
+    return ["HERE", "HEHE", "crit_here", "crit_hehe"];
+  }
+}
+
+function saveDeletedCriteriaIds(compId: string, ids: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`sofea_deleted_crit_${compId}`, JSON.stringify(ids));
+    notifyLocalSync();
+  } catch (e) {}
+}
+
 function getLocalCriteria(compId: string): CriteriaItem[] {
   if (typeof window === "undefined") return [];
+  const deleted = getDeletedCriteriaIds(compId);
   try {
     const raw = localStorage.getItem(`sofea_criteria_${compId}`);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const items: CriteriaItem[] = JSON.parse(raw);
+      return items.filter((c) => {
+        const k = (c.key || c.id || "").toUpperCase();
+        const lbl = (c.label || "").toUpperCase();
+        return !deleted.includes(c.id) && !deleted.includes(c.key) && !deleted.includes(k) && !deleted.includes(lbl);
+      });
+    }
   } catch {}
   return DEFAULT_CRITERIA.map((c, i) => ({
     id: c.key,
@@ -217,7 +244,11 @@ function getLocalCriteria(compId: string): CriteriaItem[] {
     weight: c.weight,
     color: c.color,
     rubric: c.rubric,
-  }));
+  })).filter((c) => {
+    const k = (c.key || c.id || "").toUpperCase();
+    const lbl = (c.label || "").toUpperCase();
+    return !deleted.includes(c.id) && !deleted.includes(c.key) && !deleted.includes(k) && !deleted.includes(lbl);
+  });
 }
 
 function saveLocalCriteria(compId: string, items: CriteriaItem[]) {
@@ -620,6 +651,9 @@ export async function deleteCriteriaItem(competitionId: string, itemId: string):
   const current = getLocalCriteria(competitionId);
   const updated = current.filter((c) => c.id !== itemId && c.key !== itemId);
   saveLocalCriteria(competitionId, updated);
+
+  const deleted = getDeletedCriteriaIds(competitionId);
+  saveDeletedCriteriaIds(competitionId, Array.from(new Set([...deleted, itemId])));
 }
 
 // ─── Criteria Sets ─────────────────────────────────────────────────────────────

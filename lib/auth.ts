@@ -21,16 +21,14 @@ const SESSION_KEY = "sofea_session";
 export function verifyJudgeCredentials(name: string, email: string): Judge | null {
   const judges = getAllLocalJudges();
   const cleanEmail = email.trim().toLowerCase();
-  const cleanName = name.trim().toLowerCase();
 
-  // Enforce STRICT EXACT MATCHING of both Full Name AND Google Email Address
-  const exactMatch = judges.find((j) => {
+  // Strict match by registered Google Email address (name can have minor typos)
+  const emailMatch = judges.find((j) => {
     const jEmail = (j.email || "").trim().toLowerCase();
-    const jName = (j.name || "").trim().toLowerCase();
-    return jEmail === cleanEmail && jName === cleanName;
+    return jEmail === cleanEmail;
   });
 
-  return exactMatch || null;
+  return emailMatch || null;
 }
 
 /**

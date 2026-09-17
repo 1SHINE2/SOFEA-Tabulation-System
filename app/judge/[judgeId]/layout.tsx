@@ -24,6 +24,15 @@ export default function JudgeLayout(props: { children: ReactNode; params: Promis
     logout();
   }
 
+  function handleGoBack() {
+    if (pathname.includes("/score/")) {
+      const parentPath = pathname.split("/score/")[0];
+      router.push(parentPath);
+    } else {
+      router.push(`/judge/${params.judgeId}`);
+    }
+  }
+
   return (
     <div className={styles.layout}>
       <header className={styles.header}>
@@ -31,10 +40,10 @@ export default function JudgeLayout(props: { children: ReactNode; params: Promis
           <div className={styles.brand}>
             {!isHome && (
               <button
-                onClick={() => router.back()}
+                onClick={handleGoBack}
                 className={styles.logoutBtn}
                 style={{ marginRight: "0.5rem" }}
-                title="Go Back"
+                title="Go to Previous Section"
               >
                 <ArrowLeft size={18} />
               </button>

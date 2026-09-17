@@ -1115,7 +1115,7 @@ function TabLive({
                       <td colSpan={activeJudges.length + 3} style={{ padding: 0 }}>
                         <div className={styles.subTableWrap}>
                           <div style={{ padding: "0.5rem 0.8rem", fontWeight: 600, color: "var(--blue-900)", fontSize: "0.85rem", background: "var(--blue-50)" }}>
-                            Detailed Criteria Scores — #{res.participant.order} {res.participant.name}
+                            Detailed Criteria Scores — #{res.participant.order} {res.participant.name} ({currentAward.name})
                           </div>
                           <table
                             style={{
@@ -1127,25 +1127,35 @@ function TabLive({
                             <thead>
                               <tr>
                                 <th>Judge Name</th>
-                                {criteria.map((c) => (
+                                {(currentAward && currentAward.criteriaKeys && currentAward.criteriaKeys.length > 0
+                                  ? criteria.filter((c) => currentAward.criteriaKeys.includes(c.key || c.id))
+                                  : criteria
+                                ).map((c) => (
                                   <th key={c.id || c.key}>
                                     {c.label} ({c.weight}%)
                                   </th>
                                 ))}
-                                <th>Overall Weighted</th>
+                                <th>Category Average</th>
                               </tr>
                             </thead>
                             <tbody>
                               {activeJudges.map((j) => {
                                 const ws = res.judgeScores[j.id];
                                 if (!ws) return null;
+                                const categoryCriteria = currentAward && currentAward.criteriaKeys && currentAward.criteriaKeys.length > 0
+                                  ? criteria.filter((c) => currentAward.criteriaKeys.includes(c.key || c.id))
+                                  : criteria;
                                 return (
                                   <tr key={j.id}>
                                     <td>{j.name}</td>
-                                    {criteria.map((c) => (
+                                    {categoryCriteria.map((c) => (
                                       <td key={c.id || c.key}>{ws.raw[c.key] || 0} / 5</td>
                                     ))}
-                                    <td style={{ fontWeight: "bold" }}>{ws.weighted.toFixed(2)}%</td>
+                                    <td style={{ fontWeight: "bold" }}>
+                                      {selectedAwardId === "award_overall"
+                                        ? `${ws.weighted.toFixed(2)}%`
+                                        : `${(ws.awardScores?.[selectedAwardId] || 0).toFixed(2)}%`}
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -1671,49 +1681,50 @@ function TabSummary({
         {/* Full Summary Table */}
         <h3 style={{ marginBottom: "1rem", marginTop: "2rem" }}>Full Summary Table</h3>
         <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Participant</th>
-                <th>Overall Avg (/100%)</th>
-                {awards.length > 0 ? (
-                  awards.map((a) => <th key={a.id}>{a.name}</th>)
-                ) : (
-                  <>
-                    <th>Vocal (C1+C2)</th>
-                    <th>Choreo (C3+C4)</th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {results
-                .slice()
-                .sort((a, b) => a.rank - b.rank)
-                .map((r) => (
-                  <tr key={r.participant.id}>
-                    <td style={{ fontWeight: "bold" }}>
-                      {getMedal(r.rank)} Rank {r.rank}
-                    </td>
-                    <td style={{ fontWeight: 600 }}>{r.participant.name}</td>
-                    <td style={{ fontWeight: "bold", color: "var(--blue-600)" }}>{r.averageWeighted.toFixed(2)}%</td>
-                    {awards.length > 0 ? (
-                      awards.map((a) => (
-                        <td key={a.id} style={{ fontWeight: 500 }}>
-                          {(r.awardAverages?.[a.id] || 0).toFixed(2)}%
-                        </td>
-                      ))
-                    ) : (
-                      <>
-                        <td>{r.averageVocal.toFixed(2)}%</td>
-                        <td>{r.averageChoreo.toFixed(2)}%</td>
-                      </>
-                    )}
+          {(() => {
+            const customAwards = awards.filter(
+              (a) =>
+                a.id !== "award_overall" &&
+                a.name !== "Main Competition Criteria" &&
+                a.name !== "Overall Winner"
+            );
+
+            return (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Participant</th>
+                    <th>Overall Avg (/100%)</th>
+                    {customAwards.map((a) => (
+                      <th key={a.id}>{a.name}</th>
+                    ))}
                   </tr>
-                ))}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {results
+                    .slice()
+                    .sort((a, b) => a.rank - b.rank)
+                    .map((r) => (
+                      <tr key={r.participant.id}>
+                        <td style={{ fontWeight: "bold" }}>
+                          {getMedal(r.rank)} Rank {r.rank}
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{r.participant.name}</td>
+                        <td style={{ fontWeight: "bold", color: "var(--blue-600)" }}>
+                          {r.averageWeighted.toFixed(2)}%
+                        </td>
+                        {customAwards.map((a) => (
+                          <td key={a.id} style={{ fontWeight: 500 }}>
+                            {(r.awardAverages?.[a.id] || 0).toFixed(2)}%
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
       </div>
     </div>
