@@ -1070,8 +1070,8 @@ export function getAwardCriteriaKeys(award: AwardCategory, allCriteria: Criteria
  * A judge is assigned to `targetAward` if:
  * 1. `targetAward` has no assignedJudgeIds (undefined), meaning all judges assigned by default.
  * 2. OR `targetAward.assignedJudgeIds` explicitly includes `judgeId`.
- * 3. OR Judge is assigned to any OTHER award `parentAward` in `allAwards` whose criteria set
- *    COVERS ALL criteria in `targetAward` (i.e. targetAwardCriteria ⊆ parentAwardCriteria).
+ * 3. OR the UNION of criteria assigned to this judge across all directly-assigned awards
+ *    COVERS ALL criteria required by `targetAward` (i.e. targetAwardCriteria ⊆ UNION(assignedCriteria)).
  */
 export function isJudgeAssignedToAward(
   judgeId: string,
@@ -1087,21 +1087,18 @@ export function isJudgeAssignedToAward(
   const targetKeys = getAwardCriteriaKeys(targetAward, allCriteria);
   if (targetKeys.length === 0) return false;
 
-  for (const parentAward of allAwards) {
-    if (parentAward.id === targetAward.id) continue;
+  // Union of criteria keys from all directly-assigned awards for this judge
+  const judgeAssignedKeys = new Set<string>();
 
-    const parentRaw = parentAward.assignedJudgeIds;
-    const isJudgeInParent = parentRaw === undefined || parentRaw.includes(judgeId);
-
-    if (isJudgeInParent) {
-      const parentKeys = getAwardCriteriaKeys(parentAward, allCriteria);
-      const coversAll = parentKeys.length > 0 && targetKeys.every((key) => parentKeys.includes(key));
-      if (coversAll) {
-        return true;
-      }
+  for (const award of allAwards) {
+    const raw = award.assignedJudgeIds;
+    const isDirectlyAssigned = raw === undefined || raw.includes(judgeId);
+    if (isDirectlyAssigned) {
+      const keys = getAwardCriteriaKeys(award, allCriteria);
+      keys.forEach((k) => judgeAssignedKeys.add(k));
     }
   }
 
-  return false;
+  return targetKeys.every((key) => judgeAssignedKeys.has(key));
 }
 

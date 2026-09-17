@@ -826,20 +826,20 @@ function TabStatus({
                                 const updated = rawAssigned.filter((id) => id !== j.id);
                                 await assignJudgesToAward(compId, award.id, updated);
 
-                                // Also uncheck judge from parent awards whose criteria cover this award
+                                // Also uncheck judge from any assigned awards sharing criteria keys with this award
                                 const targetKeys = getAwardCriteriaKeys(award, criteria);
-                                for (const parentAward of awards) {
-                                  if (parentAward.id === award.id) continue;
-                                  const parentRaw = parentAward.assignedJudgeIds !== undefined
-                                    ? parentAward.assignedJudgeIds
+                                for (const otherAward of awards) {
+                                  if (otherAward.id === award.id) continue;
+                                  const otherRaw = otherAward.assignedJudgeIds !== undefined
+                                    ? otherAward.assignedJudgeIds
                                     : judges.map((judge) => judge.id);
 
-                                  if (parentRaw.includes(j.id)) {
-                                    const parentKeys = getAwardCriteriaKeys(parentAward, criteria);
-                                    const coversAll = targetKeys.length > 0 && targetKeys.every((k) => parentKeys.includes(k));
-                                    if (coversAll) {
-                                      const updatedParent = parentRaw.filter((id) => id !== j.id);
-                                      await assignJudgesToAward(compId, parentAward.id, updatedParent);
+                                  if (otherRaw.includes(j.id)) {
+                                    const otherKeys = getAwardCriteriaKeys(otherAward, criteria);
+                                    const sharesKeys = targetKeys.some((k) => otherKeys.includes(k));
+                                    if (sharesKeys) {
+                                      const updatedOther = otherRaw.filter((id) => id !== j.id);
+                                      await assignJudgesToAward(compId, otherAward.id, updatedOther);
                                     }
                                   }
                                 }
