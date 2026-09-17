@@ -23,23 +23,14 @@ export function verifyJudgeCredentials(name: string, email: string): Judge | nul
   const cleanEmail = email.trim().toLowerCase();
   const cleanName = name.trim().toLowerCase();
 
-  // Try matching by exact email first
-  const emailFound = judges.find(
-    (j) => (j.email || "").trim().toLowerCase() === cleanEmail
-  );
-  if (emailFound) return emailFound;
-
-  // Try matching by name and domain prefix
-  const matchFound = judges.find((j) => {
+  // Enforce STRICT EXACT MATCHING of both Full Name AND Google Email Address
+  const exactMatch = judges.find((j) => {
     const jEmail = (j.email || "").trim().toLowerCase();
     const jName = (j.name || "").trim().toLowerCase();
-    return (
-      jEmail === cleanEmail ||
-      (jName.length > 0 && cleanName.length > 0 && (jName.includes(cleanName) || cleanName.includes(jName)))
-    );
+    return jEmail === cleanEmail && jName === cleanName;
   });
 
-  return matchFound || null;
+  return exactMatch || null;
 }
 
 /**
@@ -62,12 +53,15 @@ export function validatePin(pin: string): Session | null {
       const raw = localStorage.getItem(`sofea_judges_${compId}`);
       if (raw) {
         const list: Judge[] = JSON.parse(raw);
+        const now = Date.now();
         const updated = list.map((j) => {
           if (j.id === judge.id) {
+            const history = j.auditHistory || [];
             return {
               ...j,
-              lastLoginAt: Date.now(),
+              lastLoginAt: now,
               loginCount: (j.loginCount || 0) + 1,
+              auditHistory: [...history, { type: "login" as const, timestamp: now }],
             };
           }
           return j;

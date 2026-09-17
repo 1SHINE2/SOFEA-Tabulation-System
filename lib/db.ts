@@ -536,10 +536,16 @@ export async function addJudge(
 export async function recordJudgeLogout(competitionId: string, judgeId: string): Promise<void> {
   const current = getLocalJudges(competitionId);
   let updated = false;
+  const now = Date.now();
   const list = current.map((j) => {
     if (j.id === judgeId) {
       updated = true;
-      return { ...j, lastLogoutAt: Date.now() };
+      const history = j.auditHistory || [];
+      return {
+        ...j,
+        lastLogoutAt: now,
+        auditHistory: [...history, { type: "logout" as const, timestamp: now }],
+      };
     }
     return j;
   });

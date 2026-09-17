@@ -396,16 +396,48 @@ function TabJudges({ compId, judges }: { compId: string; judges: Judge[] }) {
                   </button>
                 </td>
                 <td style={{ fontSize: "0.82rem", color: "var(--gray-600)" }}>
-                  {j.lastLoginAt ? (
+                  {j.auditHistory && j.auditHistory.length > 0 ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                      <span className="badge badge-success" style={{ alignSelf: "flex-start", marginBottom: "0.1rem" }}>
+                        ✓ Active · {j.loginCount || j.auditHistory.filter((a) => a.type === "login").length} logins
+                      </span>
+                      <div
+                        style={{
+                          background: "var(--gray-50)",
+                          border: "1px solid var(--color-border)",
+                          borderRadius: "6px",
+                          padding: "0.4rem 0.6rem",
+                          maxHeight: "100px",
+                          overflowY: "auto",
+                          fontSize: "0.76rem",
+                        }}
+                      >
+                        {j.auditHistory
+                          .slice()
+                          .reverse()
+                          .map((entry, idx) => (
+                            <div key={idx} style={{ color: entry.type === "login" ? "#166534" : "#991b1b", marginBottom: "0.15rem" }}>
+                              {entry.type === "login" ? "🟢 In: " : "🔴 Out: "}
+                              {new Date(entry.timestamp).toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  ) : j.lastLoginAt ? (
                     <div>
                       <span className="badge badge-success" style={{ marginBottom: "0.25rem", display: "inline-block" }}>
                         ✓ Active · {j.loginCount || 1} logins
                       </span>
-                      <div style={{ fontSize: "0.78rem" }}>
+                      <div style={{ fontSize: "0.76rem", color: "#166534" }}>
                         In: {new Date(j.lastLoginAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </div>
                       {j.lastLogoutAt && (
-                        <div style={{ fontSize: "0.78rem", color: "var(--gray-500)" }}>
+                        <div style={{ fontSize: "0.76rem", color: "#991b1b" }}>
                           Out: {new Date(j.lastLogoutAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </div>
                       )}
@@ -1257,6 +1289,18 @@ function TabSummary({
     }
   }
 
+  // Determine assigned judges for current print award category
+  const selectedAwardObj =
+    printAwardId === "overall"
+      ? awards.find((a) => a.id === "award_overall")
+      : awards.find((a) => a.id === printAwardId);
+
+  const assignedJudgeIds = selectedAwardObj?.assignedJudgeIds;
+  const printJudges =
+    assignedJudgeIds !== undefined
+      ? activeJudges.filter((j) => assignedJudgeIds.includes(j.id))
+      : activeJudges;
+
   return (
     <div>
       {/* Printable Official Certificate Sheet (hidden on screen, visible on print) */}
@@ -1336,7 +1380,7 @@ function TabSummary({
           </h3>
 
           <div style={{ display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: "2rem 1.5rem", marginBottom: "2.5rem" }}>
-            {activeJudges.map((j) => (
+            {printJudges.map((j) => (
               <div key={j.id} style={{ textAlign: "center", minWidth: "180px" }}>
                 <div style={{ borderTop: "1.5px solid #000", paddingTop: "0.4rem", fontWeight: "bold", fontSize: "0.88rem", textTransform: "uppercase", color: "#000" }}>
                   {j.name}
@@ -1344,6 +1388,11 @@ function TabSummary({
                 <div style={{ fontSize: "0.78rem", color: "#475569" }}>Judge</div>
               </div>
             ))}
+            {printJudges.length === 0 && (
+              <div style={{ fontStyle: "italic", fontSize: "0.88rem", color: "#64748b" }}>
+                (No judges assigned to score this award category)
+              </div>
+            )}
           </div>
 
           <div style={{ display: "flex", justifyContent: "center" }}>

@@ -3,6 +3,11 @@
 
 export type UserRole = "judge" | "admin";
 
+export interface AuditLogEntry {
+  type: "login" | "logout";
+  timestamp: number;
+}
+
 export interface Judge {
   id: string; // e.g. "judge_172648..."
   name: string;
@@ -13,6 +18,7 @@ export interface Judge {
   lastLoginAt?: number;
   lastLogoutAt?: number;
   loginCount?: number;
+  auditHistory?: AuditLogEntry[];
   deviceToken?: string;
 }
 
