@@ -466,18 +466,38 @@ export function subscribeJudges(
 }
 
 export function generateRandomPin(): string {
-  return Math.floor(1000 + Math.random() * 9000).toString();
+  const existingJudges = getAllLocalJudges();
+  const usedPins = new Set<string>();
+  usedPins.add("0000"); // Admin PIN
+  existingJudges.forEach((j) => {
+    if (j.pin) usedPins.add(j.pin);
+  });
+
+  let pin = "";
+  let attempts = 0;
+  do {
+    pin = Math.floor(1000 + Math.random() * 9000).toString();
+    attempts++;
+  } while (usedPins.has(pin) && attempts < 10000);
+
+  return pin;
 }
 
-export async function addJudge(competitionId: string, name: string): Promise<Judge> {
+export async function addJudge(
+  competitionId: string,
+  name: string,
+  email: string
+): Promise<Judge> {
   const judgeId = "judge_" + Date.now() + "_" + Math.random().toString(36).substring(2, 5);
   const pin = generateRandomPin();
   const newJudge: Judge = {
     id: judgeId,
-    name,
+    name: name.trim(),
+    email: email.trim(),
     pin,
     competitionId,
     addedAt: Date.now(),
+    loginCount: 0,
   };
 
   const current = getLocalJudges(competitionId);
@@ -491,6 +511,19 @@ export async function deleteJudge(competitionId: string, judgeId: string): Promi
   const current = getLocalJudges(competitionId);
   const updated = current.filter((j) => j.id !== judgeId);
   saveLocalJudges(competitionId, updated);
+
+  // Clean up assignedJudgeIds in award categories
+  const awards = getLocalAwards(competitionId);
+  const updatedAwards = awards.map((a) => {
+    if (a.assignedJudgeIds) {
+      return {
+        ...a,
+        assignedJudgeIds: a.assignedJudgeIds.filter((id) => id !== judgeId),
+      };
+    }
+    return a;
+  });
+  saveLocalAwards(competitionId, updatedAwards);
 }
 
 // ─── Criteria Management ──────────────────────────────────────────────────────

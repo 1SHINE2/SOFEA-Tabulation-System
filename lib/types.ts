@@ -6,9 +6,13 @@ export type UserRole = "judge" | "admin";
 export interface Judge {
   id: string; // e.g. "judge_172648..."
   name: string;
+  email?: string; // Google/Gmail account for verification
   pin: string;
   competitionId?: string;
   addedAt?: number;
+  lastLoginAt?: number;
+  loginCount?: number;
+  deviceToken?: string;
 }
 
 export interface Competition {

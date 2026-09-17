@@ -31,7 +31,10 @@ export default function JudgeLayout(props: { children: ReactNode; params: Promis
                 <ArrowLeft size={18} />
               </button>
             )}
-            <img src="/logos/cte-logo.jpg" alt="CTE Logo" className={styles.logo} />
+            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <img src="/logos/uclm-logo.webp" alt="UCLM Logo" className={styles.logo} style={{ height: "36px", width: "auto" }} />
+              <img src="/logos/cte-logo.jpg" alt="CTE Logo" className={styles.logo} style={{ height: "36px", width: "auto" }} />
+            </div>
             <div>
               <h1 className={styles.title}>SOFEA Tabulation</h1>
               <p className={styles.subtitle}>Judge Portal</p>

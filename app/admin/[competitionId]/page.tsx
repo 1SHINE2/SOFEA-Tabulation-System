@@ -146,7 +146,11 @@ export default function AdminDashboard(props: {
 
   return (
     <div className="container fade-in" style={{ padding: "2rem 1.5rem" }}>
-      <div className={styles.header}>
+      <div className={styles.header} style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <img src="/logos/uclm-logo.webp" alt="UCLM Logo" style={{ height: "45px", width: "auto" }} />
+          <img src="/logos/cte-logo.jpg" alt="CTE Logo" style={{ height: "45px", width: "auto", borderRadius: "4px" }} />
+        </div>
         <div>
           <h2 className={styles.title}>{competition.name}</h2>
           <p className={styles.subtitle}>
@@ -296,18 +300,20 @@ function TabParticipants({ compId, participants }: { compId: string; participant
   );
 }
 
-// ─── 2. Judges Tab (Dynamic Creation + Random PIN Generator + Delete) ─────────
+// ─── 2. Judges Tab (Google Account Registration + Permanent PIN Generator) ─────
 
 function TabJudges({ compId, judges }: { compId: string; judges: Judge[] }) {
   const [judgeName, setJudgeName] = useState("");
+  const [judgeEmail, setJudgeEmail] = useState("");
   const [visiblePins, setVisiblePins] = useState<Record<string, boolean>>({});
 
   async function handleAddJudge(e: React.FormEvent) {
     e.preventDefault();
-    if (!judgeName.trim()) return;
+    if (!judgeName.trim() || !judgeEmail.trim()) return;
 
-    await addJudge(compId, judgeName.trim());
+    await addJudge(compId, judgeName.trim(), judgeEmail.trim());
     setJudgeName("");
+    setJudgeEmail("");
   }
 
   function togglePin(id: string) {
@@ -323,7 +329,7 @@ function TabJudges({ compId, judges }: { compId: string; judges: Judge[] }) {
     <div>
       <h3 style={{ marginBottom: "0.25rem" }}>Judges Management ({judges.length})</h3>
       <p style={{ fontSize: "0.88rem", color: "var(--color-text-muted)", marginBottom: "1.25rem" }}>
-        Add judges to generate unique random 4-digit PINs. Manage active judges for this event.
+        Register judges with their official Google/Gmail accounts. Unique permanent 4-digit PIN passcodes are generated automatically.
       </p>
 
       <form onSubmit={handleAddJudge} className={styles.addForm}>
@@ -333,11 +339,20 @@ function TabJudges({ compId, judges }: { compId: string; judges: Judge[] }) {
           value={judgeName}
           onChange={(e) => setJudgeName(e.target.value)}
           className="input"
+          style={{ flex: 1, minWidth: "220px" }}
+          required
+        />
+        <input
+          type="email"
+          placeholder="Google / Gmail Account (e.g. maria.santos@gmail.com)"
+          value={judgeEmail}
+          onChange={(e) => setJudgeEmail(e.target.value)}
+          className="input"
           style={{ flex: 1, minWidth: "250px" }}
           required
         />
         <button type="submit" className="btn btn-primary">
-          <Plus size={16} /> Add Judge (Auto PIN)
+          <Plus size={16} /> Register Judge
         </button>
       </form>
 
@@ -346,7 +361,9 @@ function TabJudges({ compId, judges }: { compId: string; judges: Judge[] }) {
           <thead>
             <tr>
               <th>Judge Name</th>
-              <th>Generated PIN</th>
+              <th>Registered Google Account</th>
+              <th>Permanent PIN</th>
+              <th>Login Audit</th>
               <th style={{ textAlign: "right" }}>Actions</th>
             </tr>
           </thead>
@@ -354,6 +371,9 @@ function TabJudges({ compId, judges }: { compId: string; judges: Judge[] }) {
             {judges.map((j) => (
               <tr key={j.id}>
                 <td style={{ fontWeight: 600 }}>{j.name}</td>
+                <td style={{ fontSize: "0.9rem", color: "var(--blue-900)" }}>
+                  {j.email || <span style={{ fontStyle: "italic", color: "var(--gray-400)" }}>Not set</span>}
+                </td>
                 <td style={{ fontFamily: "monospace", fontSize: "1.1rem" }}>
                   <span
                     style={{
@@ -375,6 +395,15 @@ function TabJudges({ compId, judges }: { compId: string; judges: Judge[] }) {
                     {visiblePins[j.id] ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </td>
+                <td style={{ fontSize: "0.82rem", color: "var(--gray-600)" }}>
+                  {j.lastLoginAt ? (
+                    <span className="badge badge-success">
+                      ✓ Active · {j.loginCount || 1} logins
+                    </span>
+                  ) : (
+                    <span className="badge badge-neutral">○ Not logged in</span>
+                  )}
+                </td>
                 <td style={{ textAlign: "right" }}>
                   <button
                     onClick={() => handleDeleteJudge(j.id, j.name)}
@@ -389,8 +418,8 @@ function TabJudges({ compId, judges }: { compId: string; judges: Judge[] }) {
             ))}
             {judges.length === 0 && (
               <tr>
-                <td colSpan={3} style={{ textAlign: "center", padding: "2rem" }}>
-                  No judges added yet. Add a judge above to generate a PIN.
+                <td colSpan={5} style={{ textAlign: "center", padding: "2rem" }}>
+                  No judges registered yet. Register a judge with their Google account above.
                 </td>
               </tr>
             )}
@@ -530,13 +559,6 @@ function TabCriteria({
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.8rem" }}>
                   <h4 style={{ margin: 0, fontSize: "1.2rem", color: "var(--blue-950)" }}>{set.name}</h4>
-                  <button
-                    onClick={() => handleToggleSetActive(set.id, set.isActive)}
-                    className={`badge ${set.isActive ? "badge-success" : "badge-neutral"}`}
-                    style={{ border: "none", cursor: "pointer", fontSize: "0.82rem" }}
-                  >
-                    {set.isActive ? "✓ Active for Judges" : "○ Inactive"}
-                  </button>
                   <span className={`badge ${setTotalWeight === 100 ? "badge-primary" : "badge-warning"}`}>
                     Weight: {setTotalWeight}% {setTotalWeight === 100 ? "✓ (Balanced)" : "(Target 100%)"}
                   </span>
@@ -726,9 +748,10 @@ function TabStatus({
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
             {awards.map((award) => {
-              const assigned = award.assignedJudgeIds !== undefined
+              const rawAssigned = award.assignedJudgeIds !== undefined
                 ? award.assignedJudgeIds
                 : judges.map((j) => j.id);
+              const validAssigned = rawAssigned.filter((id) => judges.some((j) => j.id === id));
 
               return (
                 <div key={award.id} style={{ background: "#ffffff", padding: "0.8rem 1rem", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
@@ -737,12 +760,12 @@ function TabStatus({
                       🏆 {award.name}
                     </div>
                     <span style={{ fontSize: "0.78rem", color: "var(--gray-500)" }}>
-                      {assigned.length} of {judges.length} judges assigned
+                      {validAssigned.length} of {judges.length} judges assigned
                     </span>
                   </div>
                   <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
                     {judges.map((j) => {
-                      const isChecked = assigned.includes(j.id);
+                      const isChecked = validAssigned.includes(j.id);
                       return (
                         <label key={j.id} style={{ fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
                           <input
@@ -750,8 +773,8 @@ function TabStatus({
                             checked={isChecked}
                             onChange={async () => {
                               const updated = isChecked
-                                ? assigned.filter((id) => id !== j.id)
-                                : [...assigned, j.id];
+                                ? validAssigned.filter((id) => id !== j.id)
+                                : [...validAssigned, j.id];
                               await assignJudgesToAward(compId, award.id, updated);
                             }}
                           />
@@ -1229,6 +1252,10 @@ function TabSummary({
       {/* Printable Official Certificate Sheet (hidden on screen, visible on print) */}
       <div className={styles.printSection}>
         <div className={styles.printHeader}>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "1.5rem", marginBottom: "0.8rem" }}>
+            <img src="/logos/uclm-logo.webp" alt="UCLM Logo" style={{ height: "65px", width: "auto" }} />
+            <img src="/logos/cte-logo.jpg" alt="CTE Logo" style={{ height: "65px", width: "auto", borderRadius: "4px" }} />
+          </div>
           <h2>UNIVERSITY OF CEBU LAPU-LAPU AND MANDAUE</h2>
           <p>College of Teacher Education · Society of Future Educators and Administrators</p>
           <h3 style={{ marginTop: "1rem", textTransform: "uppercase" }}>{competition.name}</h3>
@@ -1264,6 +1291,29 @@ function TabSummary({
           </div>
           <div className={styles.sigBlock}>
             <div className={styles.sigLine}>Board of Judges Representative</div>
+          </div>
+        </div>
+
+        {/* Printable Footer with UCLM/CTE Information and QR Code */}
+        <div className={styles.printFooter}>
+          <div className={styles.printFooterInfo}>
+            <div style={{ fontWeight: "bold", fontSize: "0.85rem", color: "#0f172a" }}>
+              UNIVERSITY OF CEBU LAPU-LAPU AND MANDAUE
+            </div>
+            <div style={{ fontWeight: 600, fontSize: "0.8rem", color: "#1e3a8a", marginBottom: "0.2rem" }}>
+              College of Teacher Education
+            </div>
+            <div>A.C. Cortes Avenue, Looc, Mandaue City, 6014 Cebu, Philippines</div>
+            <div>Telephone: 345-6666 local 6227 | Mobile: 0968-725-9797</div>
+            <div>Email: uclm.cte@gmail.com | Official FB Page: The CTE SOFEA</div>
+            <div>Official CTE Bulletin: https://bit.ly/uclmcte</div>
+          </div>
+          <div>
+            <img
+              src="/logos/uclm-qr.png"
+              alt="UCLM CTE QR Code"
+              className={styles.printFooterQr}
+            />
           </div>
         </div>
       </div>

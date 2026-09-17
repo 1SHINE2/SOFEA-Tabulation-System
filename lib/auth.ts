@@ -9,9 +9,38 @@ export interface Session {
   role: UserRole;
   judgeId?: string;
   judgeName?: string;
+  email?: string;
 }
 
 const SESSION_KEY = "sofea_session";
+
+/**
+ * Verify judge authorization using Name and Google/Gmail account registered by Admin.
+ * Returns judge profile if authorized, null otherwise.
+ */
+export function verifyJudgeCredentials(name: string, email: string): Judge | null {
+  const judges = getAllLocalJudges();
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanName = name.trim().toLowerCase();
+
+  // Try matching by exact email first
+  const emailFound = judges.find(
+    (j) => (j.email || "").trim().toLowerCase() === cleanEmail
+  );
+  if (emailFound) return emailFound;
+
+  // Try matching by name and domain prefix
+  const matchFound = judges.find((j) => {
+    const jEmail = (j.email || "").trim().toLowerCase();
+    const jName = (j.name || "").trim().toLowerCase();
+    return (
+      jEmail === cleanEmail ||
+      (jName.length > 0 && cleanName.length > 0 && (jName.includes(cleanName) || cleanName.includes(jName)))
+    );
+  });
+
+  return matchFound || null;
+}
 
 /**
  * Validate a PIN against judges and admin.
@@ -27,7 +56,32 @@ export function validatePin(pin: string): Session | null {
   const judges = getAllLocalJudges();
   const judge = judges.find((j) => j.pin === pin);
   if (judge) {
-    return { role: "judge", judgeId: judge.id, judgeName: judge.name };
+    // Record audit details in localStorage
+    try {
+      const compId = judge.competitionId || "comp_1";
+      const raw = localStorage.getItem(`sofea_judges_${compId}`);
+      if (raw) {
+        const list: Judge[] = JSON.parse(raw);
+        const updated = list.map((j) => {
+          if (j.id === judge.id) {
+            return {
+              ...j,
+              lastLoginAt: Date.now(),
+              loginCount: (j.loginCount || 0) + 1,
+            };
+          }
+          return j;
+        });
+        localStorage.setItem(`sofea_judges_${compId}`, JSON.stringify(updated));
+      }
+    } catch (e) {}
+
+    return {
+      role: "judge",
+      judgeId: judge.id,
+      judgeName: judge.name,
+      email: judge.email,
+    };
   }
 
   return null;

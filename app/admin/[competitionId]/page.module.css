@@ -213,4 +213,24 @@
     font-size: 0.85rem;
     font-weight: 600;
   }
+  .printFooter {
+    margin-top: 2.5rem;
+    padding-top: 0.8rem;
+    border-top: 1.5px solid #1e293b;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    page-break-inside: avoid;
+  }
+  .printFooterInfo {
+    font-size: 0.78rem;
+    color: #1e293b;
+    line-height: 1.45;
+  }
+  .printFooterQr {
+    height: 75px;
+    width: 75px;
+    object-fit: contain;
+  }
 }
+
