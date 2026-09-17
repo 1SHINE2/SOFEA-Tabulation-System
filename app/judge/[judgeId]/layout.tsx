@@ -3,6 +3,7 @@ import { use, type ReactNode } from "react";
 import { useSession } from "@/hooks/useSession";
 import { useRouter, usePathname } from "next/navigation";
 import { LogOut, ArrowLeft } from "lucide-react";
+import { recordJudgeLogout } from "@/lib/db";
 import styles from "./layout.module.css";
 
 export default function JudgeLayout(props: { children: ReactNode; params: Promise<{ judgeId: string }> }) {
@@ -15,6 +16,13 @@ export default function JudgeLayout(props: { children: ReactNode; params: Promis
   if (loading || !session) return null;
 
   const isHome = pathname === `/judge/${params.judgeId}`;
+
+  async function handleLogout() {
+    try {
+      await recordJudgeLogout("comp_1", params.judgeId);
+    } catch (e) {}
+    logout();
+  }
 
   return (
     <div className={styles.layout}>
@@ -42,7 +50,7 @@ export default function JudgeLayout(props: { children: ReactNode; params: Promis
           </div>
           <div className={styles.userSection}>
             <span className={styles.judgeName}>{session.judgeName}</span>
-            <button onClick={logout} className={styles.logoutBtn} aria-label="Logout" title="Logout">
+            <button onClick={handleLogout} className={styles.logoutBtn} aria-label="Logout" title="Logout">
               <LogOut size={18} />
             </button>
           </div>

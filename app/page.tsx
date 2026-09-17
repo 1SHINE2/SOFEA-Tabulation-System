@@ -40,14 +40,16 @@ export default function LandingPage() {
     setError("");
   }
 
-  function handleVerifyJudge(e: React.FormEvent) {
+  const [emailSentNotice, setEmailSentNotice] = useState("");
+
+  async function handleVerifyJudge(e: React.FormEvent) {
     e.preventDefault();
     if (!judgeNameInput.trim() || !judgeEmailInput.trim()) return;
 
     setLoading(true);
     setError("");
 
-    setTimeout(() => {
+    try {
       const match = verifyJudgeCredentials(judgeNameInput, judgeEmailInput);
       if (!match) {
         setError(
@@ -58,10 +60,27 @@ export default function LandingPage() {
       }
 
       setVerifiedJudge(match);
-      setPin(match.pin);
+      setPin("");
       setStep("pin");
+
+      // Dispatch PIN to judge's Gmail via API
+      try {
+        await fetch("/api/send-pin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: match.email,
+            name: match.name,
+            pin: match.pin,
+          }),
+        });
+        setEmailSentNotice(`A verification email containing your permanent PIN passcode has been sent to ${match.email}. Please check your inbox / spam folder.`);
+      } catch (err) {
+        setEmailSentNotice(`Identity verified for ${match.email}. Please check your registered Gmail for your PIN.`);
+      }
+    } finally {
       setLoading(false);
-    }, 400);
+    }
   }
 
   function handlePinChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -191,7 +210,7 @@ export default function LandingPage() {
           </div>
         )}
 
-        {/* Verified Judge Permanent PIN Display & Step 3: PIN Entry */}
+        {/* Verified Judge Banner & Step 3: PIN Entry */}
         {selectedRole && (selectedRole === "admin" || step === "pin") && (
           <div className={styles.pinSection}>
             {selectedRole === "judge" && verifiedJudge && (
@@ -199,18 +218,30 @@ export default function LandingPage() {
                 style={{
                   background: "var(--blue-50)",
                   border: "1px solid var(--blue-200)",
-                  padding: "0.8rem 1rem",
+                  padding: "0.9rem 1rem",
                   borderRadius: "8px",
                   marginBottom: "1rem",
                   textAlign: "center",
                 }}
               >
-                <div style={{ fontSize: "0.85rem", color: "var(--blue-900)", fontWeight: 600 }}>
+                <div style={{ fontSize: "0.9rem", color: "var(--blue-900)", fontWeight: 700 }}>
                   ✓ Identity Verified: {verifiedJudge.name}
                 </div>
-                <div style={{ fontSize: "0.8rem", color: "var(--gray-600)" }}>{verifiedJudge.email}</div>
-                <div style={{ marginTop: "0.4rem", fontFamily: "monospace", fontSize: "1.1rem", color: "var(--blue-950)", fontWeight: "bold" }}>
-                  Permanent PIN Passcode: <span style={{ background: "#ffffff", padding: "0.2rem 0.5rem", borderRadius: "4px", border: "1px solid var(--blue-300)" }}>{verifiedJudge.pin}</span>
+                <div style={{ fontSize: "0.82rem", color: "var(--blue-800)", marginBottom: "0.4rem" }}>
+                  {verifiedJudge.email}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.82rem",
+                    color: "#1e3a8a",
+                    background: "#ffffff",
+                    padding: "0.5rem 0.75rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--blue-200)",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  ✉️ {emailSentNotice || "A verification email with your permanent PIN passcode has been dispatched to your Gmail."}
                 </div>
               </div>
             )}

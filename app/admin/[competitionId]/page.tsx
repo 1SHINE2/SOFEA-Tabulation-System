@@ -397,9 +397,19 @@ function TabJudges({ compId, judges }: { compId: string; judges: Judge[] }) {
                 </td>
                 <td style={{ fontSize: "0.82rem", color: "var(--gray-600)" }}>
                   {j.lastLoginAt ? (
-                    <span className="badge badge-success">
-                      ✓ Active · {j.loginCount || 1} logins
-                    </span>
+                    <div>
+                      <span className="badge badge-success" style={{ marginBottom: "0.25rem", display: "inline-block" }}>
+                        ✓ Active · {j.loginCount || 1} logins
+                      </span>
+                      <div style={{ fontSize: "0.78rem" }}>
+                        In: {new Date(j.lastLoginAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                      {j.lastLogoutAt && (
+                        <div style={{ fontSize: "0.78rem", color: "var(--gray-500)" }}>
+                          Out: {new Date(j.lastLogoutAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <span className="badge badge-neutral">○ Not logged in</span>
                   )}
@@ -1252,15 +1262,50 @@ function TabSummary({
       {/* Printable Official Certificate Sheet (hidden on screen, visible on print) */}
       <div className={styles.printSection}>
         <div className={styles.printHeader}>
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "1.5rem", marginBottom: "0.8rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.8rem" }}>
             <img src="/logos/uclm-logo.webp" alt="UCLM Logo" style={{ height: "65px", width: "auto" }} />
+            <div style={{ textAlign: "center", flex: 1, padding: "0 1rem" }}>
+              <h2 style={{ fontSize: "1.15rem", fontWeight: "bold", margin: "0 0 0.15rem 0", letterSpacing: "0.3px", color: "#000000" }}>
+                UNIVERSITY OF CEBU - LAPULAPU AND MANDAUE, INC
+              </h2>
+              <p style={{ fontSize: "0.8rem", margin: "0 0 0.15rem 0", color: "#334155" }}>
+                A.C. Cortes Avenue, Looc, Mandaue City 6014, Cebu, Philippines
+              </p>
+              <p style={{ fontSize: "0.85rem", fontWeight: 600, margin: "0 0 0.1rem 0", color: "#000000" }}>
+                College of Teacher Education
+              </p>
+              <p style={{ fontSize: "0.78rem", margin: "0 0 0.1rem 0", color: "#475569" }}>
+                PACUCOA Level III Accredited
+              </p>
+              <p style={{ fontSize: "0.78rem", margin: "0 0 0.1rem 0", color: "#475569" }}>
+                Excellence in Quality Assurance in Teacher Education CHED Dual Awardee
+              </p>
+              <p style={{ fontSize: "0.8rem", fontWeight: 600, margin: 0, color: "#1e3a8a" }}>
+                1st Semester, A.Y. 2026-2027
+              </p>
+            </div>
             <img src="/logos/cte-logo.jpg" alt="CTE Logo" style={{ height: "65px", width: "auto", borderRadius: "4px" }} />
           </div>
-          <h2>UNIVERSITY OF CEBU LAPU-LAPU AND MANDAUE</h2>
-          <p>College of Teacher Education · Society of Future Educators and Administrators</p>
-          <h3 style={{ marginTop: "1rem", textTransform: "uppercase" }}>{competition.name}</h3>
-          <p>Academic Year {competition.academicYear} · Official Event Tabulation</p>
-          <h4 style={{ marginTop: "1rem", textDecoration: "underline", color: "#1e3a8a" }}>{printTitle}</h4>
+
+          <div style={{ borderTop: "3px double #1e3a8a", margin: "0.6rem 0 0.8rem 0" }} />
+
+          <div style={{ textAlign: "center" }}>
+            <h3 style={{ fontSize: "1.05rem", fontWeight: "bold", textTransform: "uppercase", margin: "0 0 0.25rem 0", color: "#000" }}>
+              SOFEA 1st Semester General Assembly - A.Y. 2026-2027
+            </h3>
+            <p style={{ fontSize: "0.88rem", fontStyle: "italic", margin: "0 0 0.25rem 0", color: "#334155" }}>
+              "Arete 2026! Actualizing Responsive Ethics Toward Excellence in Education"
+            </p>
+            <p style={{ fontSize: "0.82rem", fontWeight: 600, margin: "0 0 0.15rem 0" }}>
+              September 19, 2026 | 8:00 AM to 12:00 NN
+            </p>
+            <p style={{ fontSize: "0.82rem", color: "#475569", margin: "0 0 0.8rem 0" }}>
+              BE Quadrangle
+            </p>
+            <h4 style={{ fontSize: "1rem", fontWeight: "bold", textDecoration: "underline", color: "#1e3a8a", textTransform: "uppercase", margin: 0 }}>
+              {printTitle}
+            </h4>
+          </div>
         </div>
 
         <table className={styles.printTable}>
@@ -1284,13 +1329,30 @@ function TabSummary({
           </tbody>
         </table>
 
-        {/* Signature Section */}
-        <div className={styles.signatures}>
-          <div className={styles.sigBlock}>
-            <div className={styles.sigLine}>Head Tabulator Signature</div>
+        {/* Dynamic Judge Signatures Section (Matching 4th Image) */}
+        <div style={{ marginTop: "2.5rem", pageBreakInside: "avoid" }}>
+          <h3 style={{ textAlign: "center", fontSize: "0.95rem", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "2rem", color: "#000" }}>
+            CERTIFIED BY OFFICIAL JUDGES
+          </h3>
+
+          <div style={{ display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: "2rem 1.5rem", marginBottom: "2.5rem" }}>
+            {activeJudges.map((j) => (
+              <div key={j.id} style={{ textAlign: "center", minWidth: "180px" }}>
+                <div style={{ borderTop: "1.5px solid #000", paddingTop: "0.4rem", fontWeight: "bold", fontSize: "0.88rem", textTransform: "uppercase", color: "#000" }}>
+                  {j.name}
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#475569" }}>Judge</div>
+              </div>
+            ))}
           </div>
-          <div className={styles.sigBlock}>
-            <div className={styles.sigLine}>Board of Judges Representative</div>
+
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <div style={{ textAlign: "center", minWidth: "220px" }}>
+              <div style={{ borderTop: "1.5px solid #000", paddingTop: "0.4rem", fontWeight: "bold", fontSize: "0.88rem", textTransform: "uppercase", color: "#000" }}>
+                ADMIN / TABULATOR
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "#475569" }}>System Operator</div>
+            </div>
           </div>
         </div>
 

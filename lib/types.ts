@@ -11,6 +11,7 @@ export interface Judge {
   competitionId?: string;
   addedAt?: number;
   lastLoginAt?: number;
+  lastLogoutAt?: number;
   loginCount?: number;
   deviceToken?: string;
 }

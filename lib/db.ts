@@ -483,13 +483,39 @@ export function generateRandomPin(): string {
   return pin;
 }
 
+function getJudgePinHistory(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem("sofea_judge_pin_history");
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveJudgePinHistory(history: Record<string, string>) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem("sofea_judge_pin_history", JSON.stringify(history));
+  } catch (e) {}
+}
+
 export async function addJudge(
   competitionId: string,
   name: string,
   email: string
 ): Promise<Judge> {
   const judgeId = "judge_" + Date.now() + "_" + Math.random().toString(36).substring(2, 5);
-  const pin = generateRandomPin();
+  const cleanEmail = email.trim().toLowerCase();
+
+  const history = getJudgePinHistory();
+  let pin = history[cleanEmail];
+  if (!pin) {
+    pin = generateRandomPin();
+    history[cleanEmail] = pin;
+    saveJudgePinHistory(history);
+  }
+
   const newJudge: Judge = {
     id: judgeId,
     name: name.trim(),
@@ -505,6 +531,21 @@ export async function addJudge(
   saveLocalJudges(competitionId, updated);
 
   return newJudge;
+}
+
+export async function recordJudgeLogout(competitionId: string, judgeId: string): Promise<void> {
+  const current = getLocalJudges(competitionId);
+  let updated = false;
+  const list = current.map((j) => {
+    if (j.id === judgeId) {
+      updated = true;
+      return { ...j, lastLogoutAt: Date.now() };
+    }
+    return j;
+  });
+  if (updated) {
+    saveLocalJudges(competitionId, list);
+  }
 }
 
 export async function deleteJudge(competitionId: string, judgeId: string): Promise<void> {
