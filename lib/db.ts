@@ -228,9 +228,28 @@ function saveLocalCriteria(compId: string, items: CriteriaItem[]) {
   } catch (e) {}
 }
 
+function getDeletedAwardIds(compId: string): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`sofea_deleted_awards_${compId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDeletedAwardIds(compId: string, ids: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`sofea_deleted_awards_${compId}`, JSON.stringify(ids));
+    notifyLocalSync();
+  } catch (e) {}
+}
+
 function getLocalAwards(compId: string): AwardCategory[] {
   if (typeof window === "undefined") return [];
 
+  const deletedIds = getDeletedAwardIds(compId);
   const allCrit = getLocalCriteria(compId);
   const allKeys = allCrit.map((c) => c.key || c.id);
 
@@ -267,26 +286,32 @@ function getLocalAwards(compId: string): AwardCategory[] {
   } catch {}
 
   const mergedMap = new Map<string, AwardCategory>();
-  // Add defaults first
-  defaultAwards.forEach((a) => mergedMap.set(a.id, a));
-
-  // Merge saved awards
-  savedAwards.forEach((a) => {
-    if (a.id === "award_overall") {
-      mergedMap.set(a.id, {
-        ...a,
-        criteriaKeys: Array.from(new Set([...a.criteriaKeys, ...allKeys])),
-      });
-    } else {
+  // Add defaults if not deleted
+  defaultAwards.forEach((a) => {
+    if (!deletedIds.includes(a.id)) {
       mergedMap.set(a.id, a);
+    }
+  });
+
+  // Merge saved awards if not deleted
+  savedAwards.forEach((a) => {
+    if (!deletedIds.includes(a.id)) {
+      if (a.id === "award_overall") {
+        mergedMap.set(a.id, {
+          ...a,
+          criteriaKeys: Array.from(new Set([...a.criteriaKeys, ...allKeys])),
+        });
+      } else {
+        mergedMap.set(a.id, a);
+      }
     }
   });
 
   // Auto-sync Criteria Sets to Award Categories
   const critSets = getLocalCriteriaSets(compId);
   critSets.forEach((set) => {
-    if (set.id !== "set_default") {
-      const awardId = "award_" + set.id;
+    const awardId = set.id === "set_default" ? "award_overall" : "award_" + set.id;
+    if (!deletedIds.includes(awardId) && !deletedIds.includes(set.id)) {
       const itemKeys = set.items.map((i) => i.key || i.id);
       if (!mergedMap.has(awardId)) {
         mergedMap.set(awardId, {
@@ -578,11 +603,20 @@ export async function deleteCriteriaSet(
   setId: string
 ): Promise<void> {
   const current = getLocalCriteriaSets(competitionId);
+  const targetSet = current.find((s) => s.id === setId);
   const updated = current.filter((s) => s.id !== setId);
   saveLocalCriteriaSets(competitionId, updated);
 
+  const awardId = "award_" + setId;
+  const deletedIds = getDeletedAwardIds(competitionId);
+  if (!deletedIds.includes(awardId)) {
+    saveDeletedAwardIds(competitionId, [...deletedIds, awardId]);
+  }
+
   const currentAwards = getLocalAwards(competitionId);
-  const updatedAwards = currentAwards.filter((a) => a.id !== "award_" + setId);
+  const updatedAwards = currentAwards.filter(
+    (a) => a.id !== awardId && a.id !== setId && (targetSet ? a.name !== targetSet.name : true)
+  );
   saveLocalAwards(competitionId, updatedAwards);
 }
 
@@ -738,9 +772,25 @@ export async function deleteAwardCategory(
   competitionId: string,
   awardId: string
 ): Promise<void> {
+  const deletedIds = getDeletedAwardIds(competitionId);
+  if (!deletedIds.includes(awardId)) {
+    saveDeletedAwardIds(competitionId, [...deletedIds, awardId]);
+  }
+
   const current = getLocalAwards(competitionId);
+  const targetAward = current.find((a) => a.id === awardId);
   const updated = current.filter((a) => a.id !== awardId);
   saveLocalAwards(competitionId, updated);
+
+  // If there's a matching criteria set, delete it as well
+  if (targetAward) {
+    const setId = awardId.startsWith("award_") ? awardId.replace("award_", "") : awardId;
+    const sets = getLocalCriteriaSets(competitionId);
+    const updatedSets = sets.filter(
+      (s) => s.id !== setId && s.name !== targetAward.name
+    );
+    saveLocalCriteriaSets(competitionId, updatedSets);
+  }
 }
 
 // ─── Participants ─────────────────────────────────────────────────────────────

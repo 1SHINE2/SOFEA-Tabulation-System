@@ -1421,71 +1421,15 @@ function TabSummary({
 
         {/* Dynamic Rankings & Ways to Win Cards */}
         <div className={styles.rankingsGrid}>
-          {/* Overall Top Rankings */}
-          <div className={styles.rankingBox}>
-            <div className={styles.rankingTitle}>
-              <span>
-                <Trophy size={18} color="var(--color-warning)" /> Overall Top Rankings
-              </span>
-            </div>
-            <ul className={styles.rankList}>
-              {results
-                .slice()
-                .sort((a, b) => a.rank - b.rank)
-                .map((r) => (
-                  <li key={r.participant.id} className={`${styles.rankItem} ${r.rank <= 3 ? styles.rankHighlight : ""}`}>
-                    <span>
-                      {getMedal(r.rank)} {r.participant.name}
-                    </span>
-                    <span>{r.averageWeighted.toFixed(2)}%</span>
-                  </li>
-                ))}
-            </ul>
-          </div>
-
-          {/* Built-in Vocal Execution */}
-          <div className={styles.rankingBox}>
-            <div className={styles.rankingTitle}>Best in Vocal Execution (C1+C2)</div>
-            <ul className={styles.rankList}>
-              {results
-                .slice()
-                .sort((a, b) => a.vocalRank - b.vocalRank)
-                .map((r, i) => (
-                  <li key={r.participant.id} className={`${styles.rankItem} ${i === 0 ? styles.rankHighlight : ""}`}>
-                    <span>
-                      {i === 0 ? "🥇 " : `${i + 1}. `}
-                      {r.participant.name}
-                    </span>
-                    <span>{r.averageVocal.toFixed(2)}%</span>
-                  </li>
-                ))}
-            </ul>
-          </div>
-
-          {/* Built-in Pop Choreography */}
-          <div className={styles.rankingBox}>
-            <div className={styles.rankingTitle}>Best in Pop Choreo (C3+C4)</div>
-            <ul className={styles.rankList}>
-              {results
-                .slice()
-                .sort((a, b) => a.choreoRank - b.choreoRank)
-                .map((r, i) => (
-                  <li key={r.participant.id} className={`${styles.rankItem} ${i === 0 ? styles.rankHighlight : ""}`}>
-                    <span>
-                      {i === 0 ? "🥇 " : `${i + 1}. `}
-                      {r.participant.name}
-                    </span>
-                    <span>{r.averageChoreo.toFixed(2)}%</span>
-                  </li>
-                ))}
-            </ul>
-          </div>
-
-          {/* Dynamic Custom Award Categories */}
           {awards.map((award) => {
             const sortedAward = results
               .slice()
-              .sort((a, b) => (a.awardRanks?.[award.id] || 99) - (b.awardRanks?.[award.id] || 99));
+              .sort((a, b) => {
+                if (award.id === "award_overall") return a.rank - b.rank;
+                if (award.id === "award_vocal") return a.vocalRank - b.vocalRank;
+                if (award.id === "award_choreo") return a.choreoRank - b.choreoRank;
+                return (a.awardRanks?.[award.id] || 99) - (b.awardRanks?.[award.id] || 99);
+              });
 
             return (
               <div key={award.id} className={styles.rankingBox}>
@@ -1505,7 +1449,9 @@ function TabSummary({
                     </div>
                   ) : (
                     <>
-                      <span>🌟 {award.name}</span>
+                      <span>
+                        {award.id === "award_overall" ? <Trophy size={18} color="var(--color-warning)" /> : "🌟 "} {award.name}
+                      </span>
                       <div style={{ display: "flex", gap: "0.2rem" }}>
                         <button
                           className="btn btn-ghost"
@@ -1522,7 +1468,7 @@ function TabSummary({
                           className="btn btn-ghost"
                           style={{ padding: "0.2rem", color: "var(--color-danger)" }}
                           onClick={() => handleDeleteAward(award.id, award.name)}
-                          title="Delete Award"
+                          title="Delete Award Category"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -1531,19 +1477,34 @@ function TabSummary({
                   )}
                 </div>
                 <ul className={styles.rankList}>
-                  {sortedAward.map((r, i) => (
-                    <li key={r.participant.id} className={`${styles.rankItem} ${i === 0 ? styles.rankHighlight : ""}`}>
-                      <span>
-                        {i === 0 ? "🥇 " : `${i + 1}. `}
-                        {r.participant.name}
-                      </span>
-                      <span>{(r.awardAverages?.[award.id] || 0).toFixed(2)}%</span>
-                    </li>
-                  ))}
+                  {sortedAward.map((r, i) => {
+                    let scorePct = 0;
+                    if (award.id === "award_overall") scorePct = r.averageWeighted;
+                    else if (award.id === "award_vocal") scorePct = r.averageVocal;
+                    else if (award.id === "award_choreo") scorePct = r.averageChoreo;
+                    else scorePct = r.awardAverages?.[award.id] || 0;
+
+                    const isTop = i === 0 || (award.id === "award_overall" && i < 3);
+
+                    return (
+                      <li key={r.participant.id} className={`${styles.rankItem} ${isTop ? styles.rankHighlight : ""}`}>
+                        <span>
+                          {i === 0 ? "🥇 " : i === 1 ? "🥈 " : i === 2 ? "🥉 " : `${i + 1}. `}
+                          {r.participant.name}
+                        </span>
+                        <span>{scorePct.toFixed(2)}%</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             );
           })}
+          {awards.length === 0 && (
+            <div style={{ padding: "2rem", textAlign: "center", color: "var(--gray-500)", width: "100%" }}>
+              No active award categories. Create an award category above or in the Criteria tab to display rankings.
+            </div>
+          )}
         </div>
 
         {/* Full Summary Table */}

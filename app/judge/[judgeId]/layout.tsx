@@ -1,21 +1,36 @@
 "use client";
 import { use, type ReactNode } from "react";
 import { useSession } from "@/hooks/useSession";
-import { LogOut } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { LogOut, ArrowLeft } from "lucide-react";
 import styles from "./layout.module.css";
 
 export default function JudgeLayout(props: { children: ReactNode; params: Promise<{ judgeId: string }> }) {
   const { children } = props;
   const params = use(props.params);
+  const router = useRouter();
+  const pathname = usePathname();
   const { session, loading, logout } = useSession("judge");
 
   if (loading || !session) return null;
+
+  const isHome = pathname === `/judge/${params.judgeId}`;
 
   return (
     <div className={styles.layout}>
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <div className={styles.brand}>
+            {!isHome && (
+              <button
+                onClick={() => router.back()}
+                className={styles.logoutBtn}
+                style={{ marginRight: "0.5rem" }}
+                title="Go Back"
+              >
+                <ArrowLeft size={18} />
+              </button>
+            )}
             <img src="/logos/cte-logo.jpg" alt="CTE Logo" className={styles.logo} />
             <div>
               <h1 className={styles.title}>SOFEA Tabulation</h1>
@@ -24,7 +39,7 @@ export default function JudgeLayout(props: { children: ReactNode; params: Promis
           </div>
           <div className={styles.userSection}>
             <span className={styles.judgeName}>{session.judgeName}</span>
-            <button onClick={logout} className={styles.logoutBtn} aria-label="Logout">
+            <button onClick={logout} className={styles.logoutBtn} aria-label="Logout" title="Logout">
               <LogOut size={18} />
             </button>
           </div>
