@@ -140,20 +140,12 @@ function saveLocalScores(compId: string, scores: ScoreEntry[]) {
 }
 
 function getLocalJudges(compId: string): Judge[] {
-  if (typeof window === "undefined") return INITIAL_JUDGES;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(`sofea_judges_${compId}`);
-    if (raw) {
-      const parsed: Judge[] = JSON.parse(raw);
-      if (parsed.length > 0) return parsed;
-    }
+    if (raw) return JSON.parse(raw);
   } catch {}
-
-  const defaults = INITIAL_JUDGES.map((j) => ({ ...j, competitionId: compId }));
-  try {
-    localStorage.setItem(`sofea_judges_${compId}`, JSON.stringify(defaults));
-  } catch (e) {}
-  return defaults;
+  return [];
 }
 
 function saveLocalJudges(compId: string, judges: Judge[]) {
@@ -165,7 +157,7 @@ function saveLocalJudges(compId: string, judges: Judge[]) {
 }
 
 export function getAllLocalJudges(): Judge[] {
-  if (typeof window === "undefined") return INITIAL_JUDGES;
+  if (typeof window === "undefined") return [];
   try {
     const list: Judge[] = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -178,9 +170,10 @@ export function getAllLocalJudges(): Judge[] {
         }
       }
     }
-    if (list.length > 0) return list;
-  } catch {}
-  return getLocalJudges("comp_1");
+    return list;
+  } catch {
+    return [];
+  }
 }
 
 function getLocalCriteriaSets(compId: string): CriteriaSet[] {
@@ -494,22 +487,10 @@ function getJudgePinHistory(): Record<string, string> {
   if (typeof window === "undefined") return {};
   try {
     const raw = localStorage.getItem("sofea_judge_pin_history");
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Object.keys(parsed).length > 0) return parsed;
-    }
-  } catch {}
-
-  const defaultHistory: Record<string, string> = {
-    "jerichoygot8@gmail.com": "2993",
-    "lyzah.regala@gmail.com": "1024",
-    "christian.dacumos@gmail.com": "5678",
-    "sarah.lumbab@gmail.com": "4321",
-  };
-  try {
-    localStorage.setItem("sofea_judge_pin_history", JSON.stringify(defaultHistory));
-  } catch (e) {}
-  return defaultHistory;
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
 }
 
 function saveJudgePinHistory(history: Record<string, string>) {
