@@ -175,7 +175,44 @@ export const CRITERIA = DEFAULT_CRITERIA;
 
 // ─── Initial Default Judges (for seed fallback) ────────────────────────────────
 
-export const INITIAL_JUDGES: Judge[] = [];
+export const INITIAL_JUDGES: Judge[] = [
+  {
+    id: "judge_1",
+    name: "Jericho Ygot",
+    email: "jerichoygot8@gmail.com",
+    pin: "2993",
+    competitionId: "comp_1",
+    addedAt: 1,
+    loginCount: 0,
+  },
+  {
+    id: "judge_2",
+    name: "Lyzah A. Regala",
+    email: "lyzah.regala@gmail.com",
+    pin: "1024",
+    competitionId: "comp_1",
+    addedAt: 2,
+    loginCount: 0,
+  },
+  {
+    id: "judge_3",
+    name: "Christian Adely Dacumos",
+    email: "christian.dacumos@gmail.com",
+    pin: "5678",
+    competitionId: "comp_1",
+    addedAt: 3,
+    loginCount: 0,
+  },
+  {
+    id: "judge_4",
+    name: "Sarah Jean Lumbab",
+    email: "sarah.lumbab@gmail.com",
+    pin: "4321",
+    competitionId: "comp_1",
+    addedAt: 4,
+    loginCount: 0,
+  },
+];
 
 export const JUDGES = INITIAL_JUDGES;
 
