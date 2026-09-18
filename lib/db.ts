@@ -37,6 +37,58 @@ function notifyLocalSync() {
   } catch (e) {}
 }
 
+// ─── Real-Time Cloud Sync Engine ───────────────────────────────────────────────
+
+let lastSyncedVersion = 0;
+let isPollingStarted = false;
+
+export function pushCloudSync(key: string, data: any) {
+  if (typeof window === "undefined") return;
+  fetch("/api/sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key, data }),
+  }).catch(() => {});
+}
+
+export function startCloudSyncPolling() {
+  if (typeof window === "undefined" || isPollingStarted) return;
+  isPollingStarted = true;
+
+  const poll = async () => {
+    try {
+      const res = await fetch(`/api/sync?since=${lastSyncedVersion}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.updated && json.data) {
+          lastSyncedVersion = json.version;
+          let changed = false;
+          Object.entries(json.data).forEach(([key, val]) => {
+            const currentRaw = localStorage.getItem(key);
+            const valRaw = JSON.stringify(val);
+            if (currentRaw !== valRaw) {
+              localStorage.setItem(key, valRaw);
+              changed = true;
+            }
+          });
+          if (changed) {
+            notifyLocalSync();
+          }
+        } else if (json.version) {
+          lastSyncedVersion = json.version;
+        }
+      }
+    } catch (e) {}
+  };
+
+  poll();
+  setInterval(poll, 1500);
+}
+
+if (typeof window !== "undefined") {
+  startCloudSyncPolling();
+}
+
 // ─── LocalStorage Cache Helpers ────────────────────────────────────────────────
 
 function getLocalCompetitions(): Competition[] {
@@ -60,6 +112,7 @@ function getLocalCompetitions(): Competition[] {
         });
         if (updated) {
           localStorage.setItem("sofea_competitions", JSON.stringify(migrated));
+          pushCloudSync("sofea_competitions", migrated);
         }
         return migrated;
       }
@@ -81,6 +134,7 @@ function getLocalCompetitions(): Competition[] {
   };
   try {
     localStorage.setItem("sofea_competitions", JSON.stringify([defaultComp]));
+    pushCloudSync("sofea_competitions", [defaultComp]);
   } catch (e) {}
   return [defaultComp];
 }
@@ -89,6 +143,7 @@ function saveLocalCompetitions(comps: Competition[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem("sofea_competitions", JSON.stringify(comps));
+    pushCloudSync("sofea_competitions", comps);
     notifyLocalSync();
   } catch (e) {}
 }
@@ -112,6 +167,7 @@ function saveLocalParticipants(compId: string, parts: Participant[]) {
     parts.forEach((p) => map.set(p.id, p));
     const merged = Array.from(map.values()).sort((a, b) => a.order - b.order);
     localStorage.setItem(`sofea_parts_${compId}`, JSON.stringify(merged));
+    pushCloudSync(`sofea_parts_${compId}`, merged);
     notifyLocalSync();
   } catch (e) {}
 }
@@ -135,6 +191,7 @@ function saveLocalScores(compId: string, scores: ScoreEntry[]) {
     scores.forEach((s) => map.set(`${s.judgeId}_${s.participantId}`, s));
     const merged = Array.from(map.values());
     localStorage.setItem(`sofea_scores_${compId}`, JSON.stringify(merged));
+    pushCloudSync(`sofea_scores_${compId}`, merged);
     notifyLocalSync();
   } catch (e) {}
 }
@@ -152,6 +209,7 @@ function saveLocalJudges(compId: string, judges: Judge[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(`sofea_judges_${compId}`, JSON.stringify(judges));
+    pushCloudSync(`sofea_judges_${compId}`, judges);
     notifyLocalSync();
   } catch (e) {}
 }
@@ -200,6 +258,7 @@ function saveLocalCriteriaSets(compId: string, sets: CriteriaSet[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(`sofea_crit_sets_${compId}`, JSON.stringify(sets));
+    pushCloudSync(`sofea_crit_sets_${compId}`, sets);
     notifyLocalSync();
   } catch (e) {}
 }
@@ -219,6 +278,7 @@ function saveDeletedCriteriaIds(compId: string, ids: string[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(`sofea_deleted_crit_${compId}`, JSON.stringify(ids));
+    pushCloudSync(`sofea_deleted_crit_${compId}`, ids);
     notifyLocalSync();
   } catch (e) {}
 }
@@ -255,6 +315,7 @@ function saveLocalCriteria(compId: string, items: CriteriaItem[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(`sofea_criteria_${compId}`, JSON.stringify(items));
+    pushCloudSync(`sofea_criteria_${compId}`, items);
     notifyLocalSync();
   } catch (e) {}
 }
@@ -273,6 +334,7 @@ function saveDeletedAwardIds(compId: string, ids: string[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(`sofea_deleted_awards_${compId}`, JSON.stringify(ids));
+    pushCloudSync(`sofea_deleted_awards_${compId}`, ids);
     notifyLocalSync();
   } catch (e) {}
 }
@@ -372,6 +434,7 @@ function saveLocalAwards(compId: string, awards: AwardCategory[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(`sofea_awards_${compId}`, JSON.stringify(awards));
+    pushCloudSync(`sofea_awards_${compId}`, awards);
     notifyLocalSync();
   } catch (e) {}
 }
@@ -528,6 +591,7 @@ function saveJudgePinHistory(history: Record<string, string>) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem("sofea_judge_pin_history", JSON.stringify(history));
+    pushCloudSync("sofea_judge_pin_history", history);
   } catch (e) {}
 }
 
@@ -964,6 +1028,7 @@ export async function removeParticipant(
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem(`sofea_parts_${competitionId}`, JSON.stringify(updated));
+      pushCloudSync(`sofea_parts_${competitionId}`, updated);
       notifyLocalSync();
     } catch (e) {}
   }
@@ -1019,6 +1084,7 @@ export async function saveScore(
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem(`sofea_scores_${competitionId}`, JSON.stringify(merged));
+      pushCloudSync(`sofea_scores_${competitionId}`, merged);
       notifyLocalSync();
     } catch (e) {}
   }
@@ -1037,6 +1103,7 @@ export async function deleteScore(
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem(`sofea_scores_${competitionId}`, JSON.stringify(updated));
+      pushCloudSync(`sofea_scores_${competitionId}`, updated);
       notifyLocalSync();
     } catch (e) {}
   }
