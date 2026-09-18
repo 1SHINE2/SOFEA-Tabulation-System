@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-// Upstash Redis Environment Variables (optional, if configured on Vercel)
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+// Upstash Redis / Vercel KV Environment Variables (auto-injected by Vercel Storage)
+const UPSTASH_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
 // GitHub Gist Cloud Sync (optional, if configured)
 const GITHUB_TOKEN = process.env.GITHUB_SYNC_TOKEN;
