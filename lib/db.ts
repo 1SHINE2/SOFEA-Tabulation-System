@@ -44,9 +44,10 @@ let isPollingStarted = false;
 
 export function pushCloudSync(key: string, data: any) {
   if (typeof window === "undefined") return;
-  fetch("/api/sync", {
+  fetch(`/api/sync?_t=${Date.now()}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-cache" },
+    cache: "no-store",
     body: JSON.stringify({ key, data }),
   }).catch(() => {});
 }
@@ -57,7 +58,10 @@ export function startCloudSyncPolling() {
 
   const poll = async () => {
     try {
-      const res = await fetch(`/api/sync?since=${lastSyncedVersion}`);
+      const res = await fetch(`/api/sync?since=${lastSyncedVersion}&_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      });
       if (res.ok) {
         const json = await res.json();
         if (json.updated && json.data) {
