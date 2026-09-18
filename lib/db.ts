@@ -29,11 +29,28 @@ import { DEFAULT_CRITERIA, INITIAL_JUDGES } from "./types";
 
 const SYNC_EVENT = "sofea_tabulation_db_sync";
 
+let syncChannel: any = null;
+if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+  try {
+    syncChannel = new BroadcastChannel("sofea_sync_channel");
+    syncChannel.onmessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === "sync") {
+        window.dispatchEvent(new CustomEvent(SYNC_EVENT));
+      }
+    };
+  } catch (e) {}
+}
+
 function notifyLocalSync() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(SYNC_EVENT));
   try {
     localStorage.setItem("sofea_sync_ping", Date.now().toString());
+  } catch (e) {}
+  try {
+    if (syncChannel) {
+      syncChannel.postMessage({ type: "sync", timestamp: Date.now() });
+    }
   } catch (e) {}
 }
 
@@ -41,6 +58,7 @@ function notifyLocalSync() {
 
 let lastSyncedVersion = 0;
 let isPollingStarted = false;
+let hasPerformedInitialFetch = false;
 
 export function pushCloudSync(key: string, data: any) {
   if (typeof window === "undefined") return;
@@ -49,14 +67,19 @@ export function pushCloudSync(key: string, data: any) {
     headers: { "Content-Type": "application/json", "Cache-Control": "no-cache" },
     cache: "no-store",
     body: JSON.stringify({ key, data }),
-  }).catch(() => {});
+  })
+    .then(() => {
+      triggerImmediatePoll();
+    })
+    .catch(() => {});
 }
 
-export function startCloudSyncPolling() {
-  if (typeof window === "undefined" || isPollingStarted) return;
-  isPollingStarted = true;
+let activePollPromise: Promise<void> | null = null;
 
-  const poll = async () => {
+export function triggerImmediatePoll(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  
+  activePollPromise = (async () => {
     try {
       const res = await fetch(`/api/sync?since=${lastSyncedVersion}&_t=${Date.now()}`, {
         cache: "no-store",
@@ -64,6 +87,7 @@ export function startCloudSyncPolling() {
       });
       if (res.ok) {
         const json = await res.json();
+        hasPerformedInitialFetch = true;
         if (json.updated && json.data) {
           lastSyncedVersion = json.version;
           let changed = false;
@@ -82,11 +106,22 @@ export function startCloudSyncPolling() {
           lastSyncedVersion = json.version;
         }
       }
-    } catch (e) {}
-  };
+    } catch (e) {
+      hasPerformedInitialFetch = true;
+    }
+  })();
 
-  poll();
-  setInterval(poll, 1500);
+  return activePollPromise;
+}
+
+export function startCloudSyncPolling() {
+  if (typeof window === "undefined" || isPollingStarted) return;
+  isPollingStarted = true;
+
+  triggerImmediatePoll();
+  setInterval(() => {
+    triggerImmediatePoll();
+  }, 800);
 }
 
 if (typeof window !== "undefined") {
@@ -136,10 +171,14 @@ function getLocalCompetitions(): Competition[] {
     status: "active",
     createdAt: Date.now(),
   };
-  try {
-    localStorage.setItem("sofea_competitions", JSON.stringify([defaultComp]));
-    pushCloudSync("sofea_competitions", [defaultComp]);
-  } catch (e) {}
+
+  // Only push default competition if initial sync completed and server was genuinely empty
+  if (hasPerformedInitialFetch) {
+    try {
+      localStorage.setItem("sofea_competitions", JSON.stringify([defaultComp]));
+      pushCloudSync("sofea_competitions", [defaultComp]);
+    } catch (e) {}
+  }
   return [defaultComp];
 }
 
@@ -165,13 +204,9 @@ function getLocalParticipants(compId: string): Participant[] {
 function saveLocalParticipants(compId: string, parts: Participant[]) {
   if (typeof window === "undefined") return;
   try {
-    const existing = getLocalParticipants(compId);
-    const map = new Map<string, Participant>();
-    existing.forEach((p) => map.set(p.id, p));
-    parts.forEach((p) => map.set(p.id, p));
-    const merged = Array.from(map.values()).sort((a, b) => a.order - b.order);
-    localStorage.setItem(`sofea_parts_${compId}`, JSON.stringify(merged));
-    pushCloudSync(`sofea_parts_${compId}`, merged);
+    const sorted = [...parts].sort((a, b) => a.order - b.order);
+    localStorage.setItem(`sofea_parts_${compId}`, JSON.stringify(sorted));
+    pushCloudSync(`sofea_parts_${compId}`, sorted);
     notifyLocalSync();
   } catch (e) {}
 }
@@ -189,13 +224,8 @@ function getLocalScores(compId: string): ScoreEntry[] {
 function saveLocalScores(compId: string, scores: ScoreEntry[]) {
   if (typeof window === "undefined") return;
   try {
-    const existing = getLocalScores(compId);
-    const map = new Map<string, ScoreEntry>();
-    existing.forEach((s) => map.set(`${s.judgeId}_${s.participantId}`, s));
-    scores.forEach((s) => map.set(`${s.judgeId}_${s.participantId}`, s));
-    const merged = Array.from(map.values());
-    localStorage.setItem(`sofea_scores_${compId}`, JSON.stringify(merged));
-    pushCloudSync(`sofea_scores_${compId}`, merged);
+    localStorage.setItem(`sofea_scores_${compId}`, JSON.stringify(scores));
+    pushCloudSync(`sofea_scores_${compId}`, scores);
     notifyLocalSync();
   } catch (e) {}
 }
@@ -452,6 +482,34 @@ export function subscribeCompetitions(
 
   function handleLocalEvent() {
     callback(getLocalCompetitions());
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener(SYNC_EVENT, handleLocalEvent);
+    window.addEventListener("storage", handleLocalEvent);
+  }
+
+  return () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener(SYNC_EVENT, handleLocalEvent);
+      window.removeEventListener("storage", handleLocalEvent);
+    }
+  };
+}
+
+export function subscribeCompetition(
+  competitionId: string,
+  callback: (comp: Competition | null) => void
+): Unsubscribe {
+  const getComp = () => {
+    const list = getLocalCompetitions();
+    return list.find((c) => c.id === competitionId) || null;
+  };
+
+  callback(getComp());
+
+  function handleLocalEvent() {
+    callback(getComp());
   }
 
   if (typeof window !== "undefined") {

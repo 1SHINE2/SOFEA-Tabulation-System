@@ -3,7 +3,7 @@
 
 import { ADMIN_PIN } from "./types";
 import type { Judge, UserRole } from "./types";
-import { getAllLocalJudges } from "./db";
+import { getAllLocalJudges, pushCloudSync } from "./db";
 
 export interface Session {
   role: UserRole;
@@ -65,6 +65,7 @@ export function validatePin(pin: string): Session | null {
           return j;
         });
         localStorage.setItem(`sofea_judges_${compId}`, JSON.stringify(updated));
+        pushCloudSync(`sofea_judges_${compId}`, updated);
       }
     } catch (e) {}
 

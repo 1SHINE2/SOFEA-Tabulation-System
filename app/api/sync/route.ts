@@ -15,18 +15,22 @@ const CACHE_FILE = path.join(process.cwd(), ".next", "sofea_cloud_store.json");
 
 let memoryStore: Record<string, any> = {};
 let currentVersion = Date.now();
+let lastLoadedTime = 0;
 let isLoaded = false;
 
 function loadLocalFileCache() {
-  if (isLoaded && Object.keys(memoryStore).length > 0) return;
   try {
     if (fs.existsSync(CACHE_FILE)) {
-      const raw = fs.readFileSync(CACHE_FILE, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed.data === "object") {
-        memoryStore = parsed.data;
-        currentVersion = parsed.version || Date.now();
-        isLoaded = true;
+      const stat = fs.statSync(CACHE_FILE);
+      if (!isLoaded || stat.mtimeMs > lastLoadedTime) {
+        const raw = fs.readFileSync(CACHE_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.data === "object") {
+          memoryStore = parsed.data;
+          currentVersion = parsed.version || Date.now();
+          lastLoadedTime = stat.mtimeMs;
+          isLoaded = true;
+        }
       }
     }
   } catch (e) {}
@@ -43,6 +47,9 @@ function saveLocalFileCache() {
       JSON.stringify({ version: currentVersion, data: memoryStore }),
       "utf-8"
     );
+    if (fs.existsSync(CACHE_FILE)) {
+      lastLoadedTime = fs.statSync(CACHE_FILE).mtimeMs;
+    }
   } catch (e) {}
 }
 

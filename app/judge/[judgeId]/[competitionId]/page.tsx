@@ -1,7 +1,7 @@
 "use client";
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { subscribeParticipants, subscribeScores, getCompetition } from "@/lib/db";
+import { subscribeParticipants, subscribeScores, subscribeCompetition } from "@/lib/db";
 import type { Participant, ScoreEntry, Competition } from "@/lib/types";
 import { ChevronRight, CheckCircle, Clock } from "lucide-react";
 import styles from "./page.module.css";
@@ -15,15 +15,9 @@ export default function CompetitionParticipants(props: { params: Promise<{ judge
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadComp() {
-      try {
-        const comp = await getCompetition(params.competitionId);
-        setCompetition(comp);
-      } catch (err) {
-        // fallback
-      }
-    }
-    loadComp();
+    const unsubComp = subscribeCompetition(params.competitionId, (comp) => {
+      setCompetition(comp);
+    });
 
     const unsubParts = subscribeParticipants(params.competitionId, (parts) => {
       setParticipants(parts);
@@ -37,6 +31,7 @@ export default function CompetitionParticipants(props: { params: Promise<{ judge
     });
 
     return () => {
+      unsubComp();
       unsubParts();
       unsubScores();
     };

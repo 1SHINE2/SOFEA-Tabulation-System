@@ -7,6 +7,7 @@ import {
   saveScore,
   deleteScore,
   getCompetition,
+  subscribeCompetition,
   subscribeCriteriaSets,
   subscribeAwards,
   isJudgeAssignedToAward,
@@ -40,30 +41,26 @@ export default function ScoreScreen(props: {
   const [showGuidelines, setShowGuidelines] = useState(false);
 
   useEffect(() => {
-    async function loadComp() {
-      try {
-        const comp = await getCompetition(params.competitionId);
-        if (comp) {
-          setCompetition(comp);
-          setIsLocked(comp.status === "locked" || comp.status === "completed");
-        } else {
-          setCompetition({
-            id: params.competitionId,
-            name: "General Assembly",
-            academicYear: "2026-2027",
-            description: "General Assembly Competition",
-            guidelines: [
-              "Each performance must strictly last between 3 to 4 minutes.",
-              "Performances that fall short of 3 minutes or exceed 4 minutes will incur a deduction.",
-              "The performance must feature an original song composition in Pop genre.",
-            ],
-            status: "active",
-            createdAt: Date.now(),
-          });
-        }
-      } catch (e) {}
-    }
-    loadComp();
+    const unsubComp = subscribeCompetition(params.competitionId, (comp) => {
+      if (comp) {
+        setCompetition(comp);
+        setIsLocked(comp.status === "locked" || comp.status === "completed");
+      } else {
+        setCompetition({
+          id: params.competitionId,
+          name: "General Assembly",
+          academicYear: "2026-2027",
+          description: "General Assembly Competition",
+          guidelines: [
+            "Each performance must strictly last between 3 to 4 minutes.",
+            "Performances that fall short of 3 minutes or exceed 4 minutes will incur a deduction.",
+            "The performance must feature an original song composition in Pop genre.",
+          ],
+          status: "active",
+          createdAt: Date.now(),
+        });
+      }
+    });
 
     const unsubParts = subscribeParticipants(params.competitionId, (parts) => {
       const p = parts.find((x) => x.id === params.participantId);
@@ -91,6 +88,7 @@ export default function ScoreScreen(props: {
     const unsubAwards = subscribeAwards(params.competitionId, (a) => setAwards(a));
 
     return () => {
+      unsubComp();
       unsubParts();
       unsubScores();
       unsubCritSets();
